@@ -116,4 +116,13 @@
     <string name="notification_channel_desc">Shows ongoing download progress, speeds, and quick controls</string>
     <string name="notification_title_downloading">Sahm is downloading %1$d files</string>
     <string name="notification_title_completed">Download completed: %1$s</string>
+
+    <!-- Live Storage & Speed Limiter -->
+    <string name="storage_free_format">%1$s free of %2$s</string>
+    <string name="storage_low_warning">Low Space (&lt; 2 GB)</string>
+    <string name="storage_insufficient_alert">Insufficient free storage space for this download</string>
+    <string name="speed_limit_title">Speed Limiter</string>
+    <string name="speed_limit_unlimited">Unlimited (Max Speed)</string>
+    <string name="speed_limit_active_format">Limit: %1$s</string>
 </resources>
+

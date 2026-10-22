@@ -238,8 +238,10 @@ export default function App() {
               onRemoveRecordOnly={(id) => webEngine.removeRecordOnly(id)}
               onDeletePhysicalFile={(id) => webEngine.removeRecordAndFile(id)}
               onEnqueueBatch={(urls) => webEngine.enqueueBatch(urls)}
+              onUpdateSettings={handleUpdateSettings}
             />
           )}
+
 
           {currentTab === 'queue' && (
             <QueueTab

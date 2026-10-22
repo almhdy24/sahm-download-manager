@@ -116,4 +116,13 @@
     <string name="notification_channel_desc">إظهار تقدم التنزيل المستمر والسرعات وأزرار التحكم السريع</string>
     <string name="notification_title_downloading">سهم يقوم بتنزيل %1$d ملفات</string>
     <string name="notification_title_completed">اكتمل التنزيل: %1$s</string>
+
+    <!-- Live Storage & Speed Limiter -->
+    <string name="storage_free_format">%1$s متبقية من %2$s</string>
+    <string name="storage_low_warning">مساحة منخفضة (أقل من 2 جيجابايت)</string>
+    <string name="storage_insufficient_alert">المساحة المتبقية غير كافية لإتمام هذا التنزيل</string>
+    <string name="speed_limit_title">محدد سرعة التنزيل</string>
+    <string name="speed_limit_unlimited">بلا حدود (أقصى سرعة)</string>
+    <string name="speed_limit_active_format">الحد: %1$s</string>
 </resources>
+

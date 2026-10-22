@@ -69,6 +69,10 @@ class MainActivity : ComponentActivity() {
             val completedDownloads by engine.completedDownloads.collectAsState(initial = emptyList())
             val maxConcurrent by engine.preferences.maxConcurrentDownloads.collectAsState()
             val isWifiOnly by engine.preferences.wifiOnly.collectAsState()
+            val speedLimitBytesPerSec by engine.preferences.speedLimitBytesPerSec.collectAsState()
+            val storageInfo = remember(activeDownloads.size, completedDownloads.size) {
+                engine.storageHelper.getStorageInfo()
+            }
 
             val navController = rememberNavController()
 
@@ -279,6 +283,9 @@ class MainActivity : ComponentActivity() {
                                 DownloadsScreen(
                                     activeDownloads = activeDownloads,
                                     maxConcurrent = maxConcurrent,
+                                    storageInfo = storageInfo,
+                                    speedLimitBytesPerSec = speedLimitBytesPerSec,
+                                    onSetSpeedLimit = { engine.preferences.setSpeedLimitBytesPerSec(it) },
                                     onAddDownload = { url, customName ->
                                         lifecycleScope.launch {
                                             val result = engine.enqueueDownload(url, customFileName = customName)
@@ -406,7 +413,7 @@ class MainActivity : ComponentActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(intent, "Open with"))
-        } catch {
+        } catch (e: Exception) {
             Toast.makeText(this, "No compatible app found to open file", Toast.LENGTH_SHORT).show()
         }
     }
@@ -420,10 +427,11 @@ class MainActivity : ComponentActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(intent, "Share via"))
-        } catch {
+        } catch (e: Exception) {
             Toast.makeText(this, "Failed to share file", Toast.LENGTH_SHORT).show()
         }
     }
+
 
     private fun getFileUri(download: DownloadEntity): Uri? {
         val path = download.finalFilePath ?: return null

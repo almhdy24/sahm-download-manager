@@ -23,7 +23,10 @@ import {
   Download,
   ListPlus,
   Info,
-  Layers
+  Layers,
+  HardDrive,
+  Gauge,
+  Check
 } from 'lucide-react';
 import { DownloadTask, UserSettings } from '../../types/download';
 import { LocaleStrings } from '../../locales/strings';
@@ -45,7 +48,9 @@ interface DownloadsTabProps {
   onRemoveRecordOnly: (id: string) => void;
   onDeletePhysicalFile: (id: string) => void;
   onEnqueueBatch: (urls: string[]) => void;
+  onUpdateSettings?: (settings: Partial<UserSettings>) => void;
 }
+
 
 type FilterCategory = 'all' | 'downloading' | 'queued' | 'paused' | 'completed' | 'failed';
 
@@ -61,8 +66,10 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
   onRetry,
   onRemoveRecordOnly,
   onDeletePhysicalFile,
-  onEnqueueBatch
+  onEnqueueBatch,
+  onUpdateSettings
 }) => {
+
   const [inputUrl, setInputUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<FilterCategory>('all');
@@ -74,6 +81,20 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
   const [preDownloadUrl, setPreDownloadUrl] = useState<string | null>(null);
   const [inspectTask, setInspectTask] = useState<DownloadTask | null>(null);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isSpeedLimitModalOpen, setIsSpeedLimitModalOpen] = useState(false);
+
+  // Live storage statistics (128GB capacity simulation)
+  const totalStorageBytes = 128 * 1024 * 1024 * 1024;
+  const downloadedFilesBytes = useMemo(() => {
+    return tasks
+      .filter(t => t.status === 'COMPLETED' || t.status === 'DOWNLOADING')
+      .reduce((acc, t) => acc + t.downloadedBytes, 0);
+  }, [tasks]);
+  const baseUsedBytes = 64.5 * 1024 * 1024 * 1024;
+  const currentUsedBytes = Math.min(totalStorageBytes, baseUsedBytes + downloadedFilesBytes);
+  const currentAvailableBytes = Math.max(0, totalStorageBytes - currentUsedBytes);
+  const storageUsedPct = (currentUsedBytes / totalStorageBytes) * 100;
+  const isLowStorage = currentAvailableBytes < 2 * 1024 * 1024 * 1024;
 
   const handlePaste = async () => {
     try {
@@ -290,6 +311,39 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
         </div>
       </div>
 
+      {/* Live Device Storage Space Meter */}
+      <div className={`flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] font-mono border transition-colors ${
+        isLowStorage 
+          ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-900 text-red-700 dark:text-red-400' 
+          : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
+      }`}>
+        <div className="flex items-center gap-2">
+          <HardDrive className={`w-3.5 h-3.5 ${isLowStorage ? 'text-red-600 dark:text-red-400' : 'text-emerald-800 dark:text-emerald-500'}`} />
+          <span>
+            {isRtl ? 'التخزين:' : 'Storage:'}{' '}
+            <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{formatBytes(currentAvailableBytes)}</strong>{' '}
+            {isRtl ? 'متبقية من' : 'free of'}{' '}
+            {formatBytes(totalStorageBytes)}
+          </span>
+          {isLowStorage && (
+            <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-300">
+              LOW
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-16 h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all duration-300 ${isLowStorage ? 'bg-red-600' : 'bg-emerald-800 dark:bg-emerald-500'}`}
+              style={{ width: `${storageUsedPct}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-zinc-400 font-mono">
+            {storageUsedPct.toFixed(0)}%
+          </span>
+        </div>
+      </div>
+
       {/* 2. Compact Segmented Category Filter Strip & Batch Actions */}
       <div className="flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 pt-0.5 text-xs">
         {/* Category Segmented Bar */}
@@ -319,8 +373,27 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
           ))}
         </div>
 
-        {/* Search & Global Actions */}
+        {/* Search, Speed Limiter & Global Actions */}
         <div className="flex items-center gap-1 shrink-0">
+          {/* Dynamic Speed Limiter Button */}
+          <button
+            type="button"
+            onClick={() => setIsSpeedLimitModalOpen(true)}
+            className={`px-2 py-0.5 text-[11px] font-mono font-medium rounded border transition-colors flex items-center gap-1 ${
+              settings.speedLimitBytesPerSec > 0
+                ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 font-semibold'
+                : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+            }`}
+            title="Throttle download bandwidth"
+          >
+            <Gauge className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+            <span>
+              {settings.speedLimitBytesPerSec <= 0
+                ? '⚡ Max'
+                : `⚡ ${formatSpeed(settings.speedLimitBytesPerSec)}`}
+            </span>
+          </button>
+
           <button
             onClick={() => setShowSearch(!showSearch)}
             className={`p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 ${showSearch ? 'bg-zinc-100 dark:bg-zinc-800 text-emerald-700 dark:text-emerald-400' : ''}`}
@@ -328,6 +401,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
           >
             <Search className="w-3.5 h-3.5" />
           </button>
+
           
           {counts.downloading > 0 && (
             <button
@@ -657,6 +731,77 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
           onEnqueueBatch={onEnqueueBatch}
         />
       )}
+
+      {/* Speed Limiter Modal */}
+      {isSpeedLimitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg max-w-sm w-full p-4 shadow-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-emerald-700 dark:text-emerald-500" />
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  {isRtl ? 'محدد سرعة التنزيل' : 'Speed Limiter'}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsSpeedLimitModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              {isRtl 
+                ? 'تحديد أقصى سرعة إجمالية لكافة التنزيلات للحفاظ على استقرار التصفح والألعاب على الشبكات المشتركة.'
+                : 'Throttle aggregate bandwidth to prevent downloads from saturating your network.'}
+            </p>
+
+            <div className="space-y-1">
+              {[
+                { label: isRtl ? 'بلا حدود (أقصى سرعة)' : 'Unlimited (Max Speed)', bytes: 0 },
+                { label: '512 KB/s (Background Friendly)', bytes: 512 * 1024 },
+                { label: '1.0 MB/s (Balanced)', bytes: 1024 * 1024 },
+                { label: '2.5 MB/s (Fast)', bytes: 2560 * 1024 },
+                { label: '5.0 MB/s (High Speed)', bytes: 5120 * 1024 },
+                { label: '10.0 MB/s (Ultra Speed)', bytes: 10240 * 1024 },
+              ].map(opt => {
+                const isSelected = settings.speedLimitBytesPerSec === opt.bytes;
+                return (
+                  <button
+                    key={opt.bytes}
+                    type="button"
+                    onClick={() => {
+                      onUpdateSettings?.({ speedLimitBytesPerSec: opt.bytes });
+                      setIsSpeedLimitModalOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded text-xs font-mono transition-colors ${
+                      isSelected
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 font-semibold border border-emerald-600/40'
+                        : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSpeedLimitModalOpen(false)}
+                className="px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800 rounded"
+              >
+                {strings.actionCancel}
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

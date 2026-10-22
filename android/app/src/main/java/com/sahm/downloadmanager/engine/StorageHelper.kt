@@ -23,19 +23,59 @@ class StorageHelper(private val context: Context) {
         return File(tempDir, "$downloadId.sahm.part")
     }
 
+    data class StorageInfo(
+        val availableBytes: Long,
+        val totalBytes: Long,
+        val usedBytes: Long,
+        val usedPercentage: Float,
+        val isLowSpace: Boolean
+    )
+
+    /**
+     * Retrieves live internal/external disk storage statistics.
+     */
+    fun getStorageInfo(): StorageInfo {
+        return try {
+            val dir = Environment.getDataDirectory() ?: context.filesDir
+            val stat = StatFs(dir.path)
+            val blockSize = stat.blockSizeLong
+            val total = stat.blockCountLong * blockSize
+            val available = stat.availableBlocksLong * blockSize
+            val used = (total - available).coerceAtLeast(0L)
+            val usedPct = if (total > 0L) (used.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+            // Low storage threshold is 2GB
+            val isLow = available < 2L * 1024 * 1024 * 1024
+            StorageInfo(
+                availableBytes = available,
+                totalBytes = total,
+                usedBytes = used,
+                usedPercentage = usedPct,
+                isLowSpace = isLow
+            )
+        } catch (e: Exception) {
+            StorageInfo(0L, 0L, 0L, 0f, false)
+        }
+    }
+
     /**
      * Checks if device has enough available storage space (with a 20MB safety margin).
      */
     fun hasAvailableSpace(requiredBytes: Long): Boolean {
         if (requiredBytes <= 0) return true
         return try {
-            val stat = StatFs(context.cacheDir.path)
-            val available = stat.availableBlocksLong * stat.blockSizeLong
-            available >= (requiredBytes + 20 * 1024 * 1024)
+            val info = getStorageInfo()
+            if (info.totalBytes > 0) {
+                info.availableBytes >= (requiredBytes + 20 * 1024 * 1024)
+            } else {
+                val stat = StatFs(context.cacheDir.path)
+                val available = stat.availableBlocksLong * stat.blockSizeLong
+                available >= (requiredBytes + 20 * 1024 * 1024)
+            }
         } catch (e: Exception) {
             true // If stat check fails, do not block user
         }
     }
+
 
     /**
      * Publishes a completed temporary file into public Downloads/Sahm collection.

@@ -1,5 +1,6 @@
 package com.sahm.downloadmanager.ui.screens.downloads
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +47,9 @@ enum class TaskFilterCategory {
 fun DownloadsScreen(
     activeDownloads: List<DownloadEntity>,
     maxConcurrent: Int,
+    storageInfo: com.sahm.downloadmanager.engine.StorageHelper.StorageInfo? = null,
+    speedLimitBytesPerSec: Long = 0L,
+    onSetSpeedLimit: (Long) -> Unit = {},
     onAddDownload: (url: String, customName: String?) -> Unit,
     onPause: (String) -> Unit,
     onResume: (String) -> Unit,
@@ -65,7 +69,9 @@ fun DownloadsScreen(
     // Dialog states
     var preDownloadTargetUrl by remember { mutableStateOf<String?>(null) }
     var showBatchDialog by remember { mutableStateOf(false) }
+    var showSpeedLimitDialog by remember { mutableStateOf(false) }
     var selectedTaskForDetails by remember { mutableStateOf<DownloadEntity?>(null) }
+
 
     val clipboardManager = LocalClipboardManager.current
 
@@ -219,9 +225,72 @@ fun DownloadsScreen(
             )
         }
 
+        // Live Storage Space Meter
+        if (storageInfo != null && storageInfo.totalBytes > 0L) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        0.5.dp, 
+                        if (storageInfo.isLowSpace) MaterialTheme.colorScheme.error.copy(alpha = 0.6f) 
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), 
+                        RoundedCornerShape(3.dp)
+                    )
+                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(3.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        imageVector = Icons.Outlined.Storage,
+                        contentDescription = "Device Storage",
+                        modifier = Modifier.size(13.dp),
+                        tint = if (storageInfo.isLowSpace) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.storage_free_format, formatBytes(storageInfo.availableBytes), formatBytes(storageInfo.totalBytes)),
+                        fontSize = 10.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (storageInfo.isLowSpace) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.storage_low_warning),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f), RoundedCornerShape(2.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+
+                // Mini horizontal gauge
+                Box(
+                    modifier = Modifier
+                        .width(46.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction = storageInfo.usedPercentage)
+                            .background(if (storageInfo.isLowSpace) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(6.dp))
 
-        // 2. Global Actions Bar (Pause All, Resume All, Retry Failed)
+        // 2. Global Actions Bar (Pause All, Resume All, Retry Failed, Speed Limiter)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -271,18 +340,48 @@ fun DownloadsScreen(
                 }
             }
 
-            IconButton(
-                onClick = { isSearchVisible = !isSearchVisible },
-                modifier = Modifier.size(26.dp)
-            ) {
-                Icon(
-                    Icons.Default.Search, 
-                    contentDescription = "Search", 
-                    modifier = Modifier.size(16.dp),
-                    tint = if (isSearchVisible || searchQuery.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Dynamic Speed Limiter Quick-Selector
+                OutlinedButton(
+                    onClick = { showSpeedLimitDialog = true },
+                    modifier = Modifier.height(26.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    shape = RoundedCornerShape(3.dp),
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (speedLimitBytesPerSec > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Speed,
+                        contentDescription = stringResource(R.string.speed_limit_title),
+                        modifier = Modifier.size(12.dp),
+                        tint = if (speedLimitBytesPerSec > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = if (speedLimitBytesPerSec <= 0L) "⚡ Max" else "⚡ ${formatSpeed(speedLimitBytesPerSec)}",
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = if (speedLimitBytesPerSec > 0) FontWeight.Bold else FontWeight.Normal,
+                        color = if (speedLimitBytesPerSec > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(
+                    onClick = { isSearchVisible = !isSearchVisible },
+                    modifier = Modifier.size(26.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Search, 
+                        contentDescription = "Search", 
+                        modifier = Modifier.size(16.dp),
+                        tint = if (isSearchVisible || searchQuery.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
+
 
         // Inline Search bar if active
         if (isSearchVisible) {
@@ -426,11 +525,24 @@ fun DownloadsScreen(
     preDownloadTargetUrl?.let { url ->
         PreDownloadDialog(
             url = url,
+            storageInfo = storageInfo,
             onDismiss = { preDownloadTargetUrl = null },
             onStartDownload = { finalUrl, customName ->
                 onAddDownload(finalUrl, customName)
                 inputUrl = ""
                 preDownloadTargetUrl = null
+            }
+        )
+    }
+
+    // Dynamic Speed Limiter Dialog
+    if (showSpeedLimitDialog) {
+        SpeedLimitDialog(
+            currentLimitBytesPerSec = speedLimitBytesPerSec,
+            onDismiss = { showSpeedLimitDialog = false },
+            onSelectLimit = {
+                onSetSpeedLimit(it)
+                showSpeedLimitDialog = false
             }
         )
     }
@@ -458,6 +570,7 @@ fun DownloadsScreen(
         )
     }
 }
+
 
 @Composable
 fun DownloadTaskRow(
@@ -672,6 +785,7 @@ fun DownloadTaskRow(
 @Composable
 fun PreDownloadDialog(
     url: String,
+    storageInfo: com.sahm.downloadmanager.engine.StorageHelper.StorageInfo? = null,
     onDismiss: () -> Unit,
     onStartDownload: (url: String, customName: String?) -> Unit
 ) {
@@ -726,6 +840,39 @@ fun PreDownloadDialog(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                // Storage feedback
+                if (storageInfo != null && storageInfo.totalBytes > 0L) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (storageInfo.isLowSpace) MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                RoundedCornerShape(3.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Storage, 
+                            contentDescription = null, 
+                            modifier = Modifier.size(11.dp), 
+                            tint = if (storageInfo.isLowSpace) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = if (storageInfo.isLowSpace) 
+                                "Low space: ${formatBytes(storageInfo.availableBytes)} available" 
+                            else 
+                                "Free space: ${formatBytes(storageInfo.availableBytes)}",
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (storageInfo.isLowSpace) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         },
         shape = RoundedCornerShape(4.dp),
@@ -746,6 +893,84 @@ fun PreDownloadDialog(
         }
     )
 }
+
+@Composable
+fun SpeedLimitDialog(
+    currentLimitBytesPerSec: Long,
+    onDismiss: () -> Unit,
+    onSelectLimit: (Long) -> Unit
+) {
+    val presets = listOf(
+        0L to stringResource(R.string.speed_limit_unlimited),
+        512 * 1024L to "512 KB/s (Background Mode)",
+        1024 * 1024L to "1.0 MB/s (Balanced)",
+        2560 * 1024L to "2.5 MB/s (Fast)",
+        5120 * 1024L to "5.0 MB/s (High Speed)",
+        10240 * 1024L to "10.0 MB/s (Ultra Speed)"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(stringResource(R.string.speed_limit_title), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Throttle aggregate download bandwidth to preserve network stability for other apps.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                presets.forEach { (limit, label) ->
+                    val isSelected = currentLimitBytesPerSec == limit
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelectLimit(limit)
+                            }
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                                RoundedCornerShape(3.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                        if (isSelected) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        shape = RoundedCornerShape(4.dp),
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", fontSize = 11.sp)
+            }
+        }
+    )
+}
+
 
 @Composable
 fun BatchDownloadDialog(
