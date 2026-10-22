@@ -60,7 +60,7 @@
     <string name="empty_completed_subtitle">Finished downloads will be stored and organized here.</string>
     <string name="completed_clear_history">Clear History</string>
     <string name="confirm_delete_title">Delete Download?</string>
-    <string name="confirm_delete_msg">Do you want to delete \"%1$s\" from your device?</string>
+    <string name="confirm_delete_msg">Do you want to delete "%1$s" from your device?</string>
 
     <!-- Files Screen -->
     <string name="files_title">File Manager</string>
@@ -96,6 +96,11 @@
     <string name="settings_section_network">Network &amp; Queue</string>
     <string name="settings_max_concurrent">Max Concurrent Downloads</string>
     <string name="settings_max_concurrent_desc">Number of files downloaded at the same time</string>
+    <string name="settings_speed_limit">Speed Limit</string>
+    <string name="settings_speed_limit_desc">Choose a cap for bandwidth usage</string>
+    <string name="settings_speed_unlimited">Unlimited</string>
+    <string name="settings_auto_retry">Auto-Retry Transient Failures</string>
+    <string name="settings_auto_retry_desc">Retry downloads automatically when a temporary network or server issue occurs</string>
     <string name="settings_wifi_only">Download on Wi-Fi Only</string>
     <string name="settings_wifi_only_desc">Pause transfers automatically when cellular data is in use</string>
 
@@ -125,4 +130,3 @@
     <string name="speed_limit_unlimited">Unlimited (Max Speed)</string>
     <string name="speed_limit_active_format">Limit: %1$s</string>
 </resources>
-
