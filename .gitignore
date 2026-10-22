@@ -19,3 +19,6 @@ signing.properties
 play-*.json
 local.properties
 .gradle/
+!**/gradle/wrapper/gradle-wrapper.jar
+!gradle-wrapper.jar
+

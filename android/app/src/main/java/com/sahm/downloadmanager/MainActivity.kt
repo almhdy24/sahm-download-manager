@@ -6,36 +6,42 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sahm.downloadmanager.data.local.DownloadEntity
+import com.sahm.downloadmanager.data.local.DownloadStatus
 import com.sahm.downloadmanager.engine.DownloadEngine
 import com.sahm.downloadmanager.ui.navigation.Screen
 import com.sahm.downloadmanager.ui.screens.completed.CompletedScreen
 import com.sahm.downloadmanager.ui.screens.downloads.DownloadsScreen
+import com.sahm.downloadmanager.ui.screens.downloads.formatSpeed
 import com.sahm.downloadmanager.ui.screens.files.FilesScreen
 import com.sahm.downloadmanager.ui.screens.queue.QueueScreen
 import com.sahm.downloadmanager.ui.screens.settings.SettingsScreen
 import com.sahm.downloadmanager.ui.theme.SahmTheme
 import kotlinx.coroutines.launch
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -66,10 +72,16 @@ class MainActivity : ComponentActivity() {
 
             val navController = rememberNavController()
 
+            // Aggregate transfer speed & active count calculation
+            val activeDownloadingCount = activeDownloads.count { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.CONNECTING }
+            val aggregateSpeed = activeDownloads
+                .filter { it.status == DownloadStatus.DOWNLOADING }
+                .sumOf { it.speedBytesPerSec }
+
             SahmTheme(darkTheme = isDark, isArabic = isArabic) {
                 Scaffold(
                     topBar = {
-                        // Compact technical utility toolbar
+                        // Desktop/Mobile Utility Toolbar with Sahm Vector Glyph & Live Telemetry
                         Surface(
                             color = MaterialTheme.colorScheme.surface,
                             tonalElevation = 0.dp,
@@ -80,38 +92,84 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(44.dp)
-                                        .padding(horizontal = 12.dp),
+                                        .padding(horizontal = 10.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // Brand Logo Mark + App Name
                                     Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_sahm_logo),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(7.dp))
+
                                         Text(
                                             text = if (isArabic) "سهم" else "Sahm",
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(5.dp))
                                         Text(
                                             text = "· Elmahdi Dev",
-                                            fontSize = 11.sp,
+                                            fontSize = 10.5.sp,
                                             fontFamily = FontFamily.Monospace,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
 
-                                    TextButton(
-                                        onClick = {
-                                            engine.preferences.setLanguage(if (isArabic) "en" else "ar")
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(26.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isArabic) "EN" else "العربية",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                    // Right controls: Live Transfer Speed Pill + Language Switcher
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (activeDownloadingCount > 0) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(3.dp))
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(5.dp)
+                                                        .clip(RoundedCornerShape(2.5.dp))
+                                                        .background(MaterialTheme.colorScheme.primary)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "$activeDownloadingCount active · ${formatSpeed(aggregateSpeed)}",
+                                                    fontSize = 10.sp,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+
+                                        TextButton(
+                                            onClick = {
+                                                engine.preferences.setLanguage(if (isArabic) "en" else "ar")
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                            modifier = Modifier.height(26.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isArabic) "English" else "العربية",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
                                 }
                                 Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
@@ -137,11 +195,59 @@ class MainActivity : ComponentActivity() {
                                         val selected = currentRoute == screen.route
                                         NavigationBarItem(
                                             icon = {
-                                                Icon(
-                                                    if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                                    contentDescription = stringResource(screen.titleRes),
-                                                    modifier = Modifier.size(18.dp)
-                                                )
+                                                when {
+                                                    screen == Screen.Downloads && activeDownloadingCount > 0 -> {
+                                                        BadgedBox(
+                                                            badge = {
+                                                                Badge(
+                                                                    containerColor = MaterialTheme.colorScheme.primary,
+                                                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                                                ) {
+                                                                    Text(
+                                                                        text = "$activeDownloadingCount",
+                                                                        fontSize = 9.sp,
+                                                                        fontFamily = FontFamily.Monospace
+                                                                    )
+                                                                }
+                                                            }
+                                                        ) {
+                                                            Icon(
+                                                                if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                                                contentDescription = stringResource(screen.titleRes),
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    screen == Screen.Queue && queuedDownloads.isNotEmpty() -> {
+                                                        BadgedBox(
+                                                            badge = {
+                                                                Badge(
+                                                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                ) {
+                                                                    Text(
+                                                                        text = "${queuedDownloads.size}",
+                                                                        fontSize = 9.sp,
+                                                                        fontFamily = FontFamily.Monospace
+                                                                    )
+                                                                }
+                                                            }
+                                                        ) {
+                                                            Icon(
+                                                                if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                                                contentDescription = stringResource(screen.titleRes),
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    else -> {
+                                                        Icon(
+                                                            if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                                            contentDescription = stringResource(screen.titleRes),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
                                             },
                                             label = { 
                                                 Text(
@@ -173,9 +279,9 @@ class MainActivity : ComponentActivity() {
                                 DownloadsScreen(
                                     activeDownloads = activeDownloads,
                                     maxConcurrent = maxConcurrent,
-                                    onAddDownload = { url ->
+                                    onAddDownload = { url, customName ->
                                         lifecycleScope.launch {
-                                            val result = engine.enqueueDownload(url)
+                                            val result = engine.enqueueDownload(url, customFileName = customName)
                                             if (result.isFailure) {
                                                 Toast.makeText(this@MainActivity, result.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
                                             }
@@ -184,7 +290,20 @@ class MainActivity : ComponentActivity() {
                                     onPause = { engine.pause(it) },
                                     onResume = { engine.resume(it) },
                                     onCancel = { engine.cancel(it) },
-                                    onRetry = { engine.retry(it) }
+                                    onRetry = { engine.retry(it) },
+                                    onPauseAll = { engine.pauseAll() },
+                                    onResumeAll = { engine.resumeAll() },
+                                    onRetryAllFailed = { engine.retryAllFailed() },
+                                    onBatchAdd = { rawText ->
+                                        lifecycleScope.launch {
+                                            val res = engine.enqueueBatch(rawText)
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Added ${res.validCount} download(s) to queue",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
                                 )
                             }
                             composable(Screen.Queue.route) {
@@ -194,7 +313,10 @@ class MainActivity : ComponentActivity() {
                                     onCancel = { engine.cancel(it) },
                                     onClearQueue = {
                                         lifecycleScope.launch { engine.clearQueue() }
-                                    }
+                                    },
+                                    onMoveUp = { engine.moveUp(it) },
+                                    onMoveDown = { engine.moveDown(it) },
+                                    onMoveToFront = { engine.moveToFront(it) }
                                 )
                             }
                             composable(Screen.Completed.route) {
@@ -203,10 +325,10 @@ class MainActivity : ComponentActivity() {
                                     onOpen = { openFile(it) },
                                     onShare = { shareFile(it) },
                                     onDelete = {
-                                        lifecycleScope.launch { engine.delete(it.id) }
+                                        lifecycleScope.launch { engine.removeRecordAndFile(it.id) }
                                     },
                                     onClearAll = {
-                                        lifecycleScope.launch { engine.clearCompleted() }
+                                        lifecycleScope.launch { engine.clearCompletedHistoryOnly() }
                                     }
                                 )
                             }
@@ -216,7 +338,7 @@ class MainActivity : ComponentActivity() {
                                     onOpenFile = { openFile(it) },
                                     onShareFile = { shareFile(it) },
                                     onDeleteFile = {
-                                        lifecycleScope.launch { engine.delete(it.id) }
+                                        lifecycleScope.launch { engine.removeRecordAndFile(it.id) }
                                     }
                                 )
                             }

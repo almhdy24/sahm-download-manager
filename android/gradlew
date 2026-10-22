@@ -76,6 +76,17 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
+# Auto-recovery: if gradle-wrapper.jar is missing, download it
+if [ ! -s "$CLASSPATH" ]; then
+    warn "Gradle wrapper JAR not found at $CLASSPATH. Downloading official wrapper JAR..."
+    WRAPPER_URL="https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar"
+    mkdir -p "$APP_HOME/gradle/wrapper"
+    if command -v curl >/dev/null 2>&1; then
+        curl -sSL "$WRAPPER_URL" -o "$CLASSPATH" || true
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$CLASSPATH" "$WRAPPER_URL" || true
+    fi
+fi
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
