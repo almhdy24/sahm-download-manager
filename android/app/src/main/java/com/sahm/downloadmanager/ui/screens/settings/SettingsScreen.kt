@@ -24,10 +24,14 @@ fun SettingsScreen(
     currentTheme: String,
     maxConcurrent: Int,
     isWifiOnly: Boolean,
+    speedLimitBytesPerSec: Long = 0L,
+    autoRetryTransient: Boolean = true,
     onLanguageChange: (String) -> Unit,
     onThemeChange: (String) -> Unit,
     onMaxConcurrentChange: (Int) -> Unit,
-    onWifiOnlyChange: (Boolean) -> Unit
+    onWifiOnlyChange: (Boolean) -> Unit,
+    onSpeedLimitChange: (Long) -> Unit = {},
+    onAutoRetryChange: (Boolean) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
 
@@ -148,6 +152,72 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+
+            // Speed Limit
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(stringResource(R.string.settings_speed_limit), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_speed_limit_desc), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val speedOptions = listOf(
+                    0L to stringResource(R.string.settings_speed_unlimited),
+                    256L * 1024L to "256 KB/s",
+                    512L * 1024L to "512 KB/s",
+                    1024L * 1024L to "1 MB/s",
+                    2048L * 1024L to "2 MB/s"
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    speedOptions.forEach { (limit, label) ->
+                        val isSelected = speedLimitBytesPerSec == limit
+                        TextButton(
+                            onClick = { onSpeedLimitChange(limit) },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                            modifier = Modifier.height(24.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+
+            Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+
+            // Auto-Retry Transient Failures
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_auto_retry), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_auto_retry_desc), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Switch(
+                    checked = autoRetryTransient,
+                    onCheckedChange = onAutoRetryChange,
+                    modifier = Modifier.height(24.dp)
+                )
             }
 
             Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))

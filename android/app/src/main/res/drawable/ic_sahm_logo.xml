@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Master Geometric Sahm Logo (سهم) - Elmahdi Dev -->
+    <!-- Distinctive precision arrowhead with technical negative-space core -->
+    <path
+        android:fillColor="#166534"
+        android:fillType="evenOdd"
+        android:pathData="M12,4 L19,3 L20,9 L12,20 L4,9 L5,3 Z M12,7 L14.5,11 L13,11 L13,15 L11,15 L11,11 L9.5,11 Z" />
+</vector>

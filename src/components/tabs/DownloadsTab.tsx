@@ -20,22 +20,31 @@ import {
   ExternalLink,
   Share2,
   Trash2,
-  Download
+  Download,
+  ListPlus,
+  Info,
+  Layers
 } from 'lucide-react';
 import { DownloadTask, UserSettings } from '../../types/download';
 import { LocaleStrings } from '../../locales/strings';
 import { SAMPLE_DOWNLOADS, webEngine } from '../../engine/webDownloadEngine';
+import { PreDownloadModal } from '../PreDownloadModal';
+import { DownloadDetailsModal } from '../DownloadDetailsModal';
+import { BatchDownloadModal } from '../BatchDownloadModal';
 
 interface DownloadsTabProps {
   tasks: DownloadTask[];
   settings: UserSettings;
   strings: LocaleStrings;
   isRtl: boolean;
-  onAddDownload: (url: string) => { success: boolean; message?: string };
+  onAddDownload: (url: string, customName?: string, totalBytes?: number, mimeType?: string, isResumable?: boolean) => { success: boolean; message?: string };
   onPause: (id: string) => void;
   onResume: (id: string) => void;
   onCancel: (id: string) => void;
   onRetry: (id: string) => void;
+  onRemoveRecordOnly: (id: string) => void;
+  onDeletePhysicalFile: (id: string) => void;
+  onEnqueueBatch: (urls: string[]) => void;
 }
 
 type FilterCategory = 'all' | 'downloading' | 'queued' | 'paused' | 'completed' | 'failed';
@@ -49,7 +58,10 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
   onPause,
   onResume,
   onCancel,
-  onRetry
+  onRetry,
+  onRemoveRecordOnly,
+  onDeletePhysicalFile,
+  onEnqueueBatch
 }) => {
   const [inputUrl, setInputUrl] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -57,6 +69,11 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Modals state
+  const [preDownloadUrl, setPreDownloadUrl] = useState<string | null>(null);
+  const [inspectTask, setInspectTask] = useState<DownloadTask | null>(null);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
   const handlePaste = async () => {
     try {
@@ -70,13 +87,28 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
     }
   };
 
-  const handleAdd = () => {
+  const handleOpenPreDownload = () => {
     const trimmed = inputUrl.trim();
     if (!trimmed) {
       setErrorMessage(isRtl ? 'يرجى إدخال عنوان URL مباشر' : 'Please enter a direct download URL');
       return;
     }
-    const result = onAddDownload(trimmed);
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      setErrorMessage(isRtl ? 'يجب أن يبدأ الرابط بـ http:// أو https://' : 'URL must start with http:// or https://');
+      return;
+    }
+    setErrorMessage(null);
+    setPreDownloadUrl(trimmed);
+  };
+
+  const handleConfirmPreDownload = (
+    url: string, 
+    fileName: string, 
+    totalBytes: number, 
+    mimeType: string, 
+    isResumable: boolean
+  ) => {
+    const result = onAddDownload(url, fileName, totalBytes, mimeType, isResumable);
     if (result.success) {
       setInputUrl('');
       setErrorMessage(null);
@@ -172,8 +204,9 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full space-y-2">
-      {/* 1. Compact URL Input Bar */}
+    <div className="flex flex-col h-full space-y-2 select-none">
+      
+      {/* 1. Compact URL Input Bar with Batch & Inspection */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-2 space-y-1.5 shadow-2xs">
         <div className="flex items-center gap-1.5">
           <div className="relative flex-1">
@@ -184,7 +217,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
                 setInputUrl(e.target.value);
                 setErrorMessage(null);
               }}
-              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              onKeyDown={(e) => e.key === 'Enter' && handleOpenPreDownload()}
               placeholder={strings.inputUrlHint}
               className="w-full h-8 px-2.5 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-700 dark:focus:border-emerald-500 font-mono"
             />
@@ -209,9 +242,19 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
           </button>
 
           <button
-            onClick={handleAdd}
+            onClick={() => setIsBatchModalOpen(true)}
             type="button"
-            className="h-8 px-3 text-xs font-semibold rounded bg-emerald-800 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white flex items-center gap-1.5 shrink-0 transition-colors"
+            className="h-8 px-2.5 text-xs font-medium rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 flex items-center gap-1 shrink-0 transition-colors"
+            title={strings.actionBatchDownload}
+          >
+            <ListPlus className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="hidden sm:inline">{strings.actionBatchDownload}</span>
+          </button>
+
+          <button
+            onClick={handleOpenPreDownload}
+            type="button"
+            className="h-8 px-3 text-xs font-semibold rounded bg-emerald-800 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white flex items-center gap-1.5 shrink-0 transition-colors shadow-2xs"
           >
             <ArrowDown className="w-3.5 h-3.5" />
             <span>{strings.actionAddDownload}</span>
@@ -237,6 +280,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
               onClick={() => {
                 setInputUrl(sample.url);
                 setErrorMessage(null);
+                setPreDownloadUrl(sample.url);
               }}
               className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] border border-zinc-200 dark:border-zinc-700/60 transition-colors shrink-0"
             >
@@ -275,7 +319,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
           ))}
         </div>
 
-        {/* Search & Batch Actions */}
+        {/* Search & Global Actions */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => setShowSearch(!showSearch)}
@@ -284,6 +328,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
           >
             <Search className="w-3.5 h-3.5" />
           </button>
+          
           {counts.downloading > 0 && (
             <button
               onClick={() => webEngine.pauseAllActive()}
@@ -292,6 +337,25 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
               {strings.actionPauseAll}
             </button>
           )}
+
+          {counts.paused > 0 && (
+            <button
+              onClick={() => webEngine.resumeAllPaused()}
+              className="px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded"
+            >
+              {strings.actionResumeAll}
+            </button>
+          )}
+
+          {counts.failed > 0 && (
+            <button
+              onClick={() => webEngine.retryAllFailed()}
+              className="px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded"
+            >
+              {strings.actionRetryFailed}
+            </button>
+          )}
+
           {counts.completed > 0 && (
             <button
               onClick={() => webEngine.clearCompleted()}
@@ -353,15 +417,22 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
             return (
               <div
                 key={task.id}
-                className="px-3 py-2.5 flex items-center justify-between gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors relative group"
+                className="px-3 py-2 flex items-center justify-between gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors relative group"
               >
                 {/* Left: File Icon */}
-                <div className="w-7 h-7 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center shrink-0">
+                <div 
+                  onClick={() => setInspectTask(task)}
+                  className="w-7 h-7 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center shrink-0 cursor-pointer"
+                  title="Click to view details"
+                >
                   {getFileIcon(task.fileName)}
                 </div>
 
                 {/* Center: File details + Progress */}
-                <div className="flex-1 min-w-0 space-y-1">
+                <div 
+                  className="flex-1 min-w-0 space-y-1 cursor-pointer"
+                  onClick={() => setInspectTask(task)}
+                >
                   <div className="flex items-baseline justify-between gap-2">
                     <span 
                       className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate select-text" 
@@ -405,7 +476,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
                     <div className="flex items-center gap-1.5 truncate">
                       <span>
                         {hasTotal 
-                          ? `${formatBytes(task.downloadedBytes)} of ${formatBytes(task.totalBytes)}` 
+                          ? `${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes)}` 
                           : formatBytes(task.downloadedBytes)}
                       </span>
                       <span>·</span>
@@ -413,7 +484,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
                         isDownloading ? 'text-emerald-700 dark:text-emerald-400 font-medium' :
                         isConnecting ? 'text-amber-600 dark:text-amber-400' :
                         isPaused ? 'text-zinc-500' :
-                        isFailed ? 'text-red-600' :
+                        isFailed ? 'text-red-600 font-medium' :
                         'text-zinc-500'
                       }`}>
                         {task.status === 'DOWNLOADING' ? strings.statusDownloading :
@@ -428,7 +499,7 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
                     <div className="flex items-center gap-1.5 shrink-0">
                       {isDownloading && (
                         <>
-                          <span>{formatSpeed(task.speedBytesPerSec)}</span>
+                          <span className="text-emerald-700 dark:text-emerald-400">{formatSpeed(task.speedBytesPerSec)}</span>
                           {task.etaSeconds > 0 && (
                             <>
                               <span>·</span>
@@ -498,9 +569,16 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
 
                     {activeMenuId === task.id && (
                       <div 
-                        className={`absolute right-0 top-6 z-30 w-36 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded shadow-md py-1 text-xs`}
+                        className={`absolute right-0 top-6 z-30 w-40 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded shadow-md py-1 text-xs`}
                         onClick={() => setActiveMenuId(null)}
                       >
+                        <button
+                          onClick={() => setInspectTask(task)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"
+                        >
+                          <Info className="w-3 h-3 text-zinc-400" />
+                          <span>{strings.actionDetails}</span>
+                        </button>
                         {isCompleted && (
                           <button
                             onClick={() => webEngine.openOrSaveFile(task)}
@@ -518,11 +596,18 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
                           <span>{strings.actionShare}</span>
                         </button>
                         <button
-                          onClick={() => onCancel(task.id)}
+                          onClick={() => onRemoveRecordOnly(task.id)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>{strings.detailsRemoveRecordOnly}</span>
+                        </button>
+                        <button
+                          onClick={() => onDeletePhysicalFile(task.id)}
                           className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-1.5 text-red-600 dark:text-red-400"
                         >
                           <Trash2 className="w-3 h-3" />
-                          <span>{strings.actionDelete}</span>
+                          <span>{strings.detailsDeletePhysicalFile}</span>
                         </button>
                       </div>
                     )}
@@ -533,6 +618,45 @@ export const DownloadsTab: React.FC<DownloadsTabProps> = ({
           })
         )}
       </div>
+
+      {/* Pre-Download Confirmation Modal */}
+      {preDownloadUrl && (
+        <PreDownloadModal
+          url={preDownloadUrl}
+          isOpen={!!preDownloadUrl}
+          onClose={() => setPreDownloadUrl(null)}
+          onConfirm={handleConfirmPreDownload}
+          strings={strings}
+          isRtl={isRtl}
+        />
+      )}
+
+      {/* Download Details Modal */}
+      {inspectTask && (
+        <DownloadDetailsModal
+          task={inspectTask}
+          isOpen={!!inspectTask}
+          onClose={() => setInspectTask(null)}
+          strings={strings}
+          isRtl={isRtl}
+          onPause={onPause}
+          onResume={onResume}
+          onRetry={onRetry}
+          onRemoveRecordOnly={onRemoveRecordOnly}
+          onDeletePhysicalFile={onDeletePhysicalFile}
+        />
+      )}
+
+      {/* Batch Downloads Modal */}
+      {isBatchModalOpen && (
+        <BatchDownloadModal
+          isOpen={isBatchModalOpen}
+          onClose={() => setIsBatchModalOpen(false)}
+          strings={strings}
+          isRtl={isRtl}
+          onEnqueueBatch={onEnqueueBatch}
+        />
+      )}
     </div>
   );
 };

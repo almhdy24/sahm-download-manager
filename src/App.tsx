@@ -100,10 +100,8 @@ export default function App() {
         <div className="flex items-center gap-2.5">
           {/* Original Sahm Geometric Vector Icon */}
           <div className="w-6 h-6 rounded bg-emerald-800 dark:bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-2xs">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-              <line x1="12" y1="4" x2="12" y2="17" />
-              <polyline points="6 11 12 17 18 11" />
-              <line x1="6" y1="20" x2="18" y2="20" />
+            <svg viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" className="w-3.5 h-3.5">
+              <path d="M12 4 L19 3 L20 9 L12 20 L4 9 L5 3 Z M12 7 L14.5 11 L13 11 L13 15 L11 15 L11 11 L9.5 11 Z" />
             </svg>
           </div>
 
@@ -230,11 +228,16 @@ export default function App() {
               settings={settings}
               strings={strings}
               isRtl={isArabic}
-              onAddDownload={(url) => webEngine.enqueue(url)}
+              onAddDownload={(url, name, size, mime, resumable) => 
+                webEngine.enqueue(url, name, size, mime, resumable)
+              }
               onPause={(id) => webEngine.pause(id)}
               onResume={(id) => webEngine.resume(id)}
               onCancel={(id) => webEngine.cancel(id)}
               onRetry={(id) => webEngine.retry(id)}
+              onRemoveRecordOnly={(id) => webEngine.removeRecordOnly(id)}
+              onDeletePhysicalFile={(id) => webEngine.removeRecordAndFile(id)}
+              onEnqueueBatch={(urls) => webEngine.enqueueBatch(urls)}
             />
           )}
 

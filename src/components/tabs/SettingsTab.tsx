@@ -10,7 +10,9 @@ import {
   Folder, 
   Shield, 
   User, 
-  Info 
+  Info,
+  Gauge,
+  RotateCcw
 } from 'lucide-react';
 import { UserSettings } from '../../types/download';
 import { LocaleStrings } from '../../locales/strings';
@@ -26,8 +28,16 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   strings,
   onUpdateSettings
 }) => {
+  const speedLimitOptions = [
+    { label: strings.settingsSpeedUnlimited, value: 0 },
+    { label: '256 KB/s', value: 256 * 1024 },
+    { label: '512 KB/s', value: 512 * 1024 },
+    { label: '1 MB/s', value: 1024 * 1024 },
+    { label: '2 MB/s', value: 2048 * 1024 },
+  ];
+
   return (
-    <div className="flex flex-col h-full overflow-y-auto space-y-4 pr-1 text-xs text-zinc-900 dark:text-zinc-100">
+    <div className="flex flex-col h-full overflow-y-auto space-y-4 pr-1 text-xs text-zinc-900 dark:text-zinc-100 select-none">
       
       {/* 1. General Preferences Group */}
       <div className="space-y-1">
@@ -103,7 +113,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Network & Concurrency Group */}
+      {/* 2. Network, Concurrency & Speed Limit Group */}
       <div className="space-y-1">
         <div className="px-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
           {strings.settingsSectionNetwork}
@@ -135,6 +145,57 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Aggregate Speed Limit */}
+          <div className="px-3 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Gauge className="w-4 h-4 text-emerald-800 dark:text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-medium text-xs text-zinc-900 dark:text-zinc-100">{strings.settingsSpeedLimit}</div>
+                <div className="text-[11px] text-zinc-400">{strings.settingsSpeedLimitDesc}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0 font-mono flex-wrap">
+              {speedLimitOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => onUpdateSettings({ speedLimitBytesPerSec: opt.value })}
+                  className={`px-2 py-1 text-[11px] rounded border transition-colors ${
+                    settings.speedLimitBytesPerSec === opt.value
+                      ? 'bg-emerald-800 dark:bg-emerald-600 text-white border-transparent font-semibold'
+                      : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Smart Auto-Retry */}
+          <div className="px-3 py-2.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <RotateCcw className="w-4 h-4 text-zinc-500 shrink-0" />
+              <div>
+                <div className="font-medium text-xs text-zinc-900 dark:text-zinc-100">{strings.settingsAutoRetry}</div>
+                <div className="text-[11px] text-zinc-400">{strings.settingsAutoRetryDesc}</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onUpdateSettings({ autoRetryTransient: !settings.autoRetryTransient })}
+              className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${
+                settings.autoRetryTransient ? 'bg-emerald-800 dark:bg-emerald-600' : 'bg-zinc-300 dark:bg-zinc-700'
+              }`}
+            >
+              <div
+                className={`w-3.5 h-3.5 rounded-full bg-white transition-transform absolute top-0.75 ${
+                  settings.autoRetryTransient ? 'right-1' : 'left-1'
+                }`}
+              />
+            </button>
           </div>
 
           {/* Wi-Fi Only Preference */}

@@ -35,12 +35,14 @@ import com.sahm.downloadmanager.ui.screens.queue.QueueScreen
 import com.sahm.downloadmanager.ui.screens.settings.SettingsScreen
 import com.sahm.downloadmanager.ui.theme.SahmTheme
 import kotlinx.coroutines.launch
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import java.io.File
 
 class MainActivity : ComponentActivity() {
     private lateinit var engine: DownloadEngine
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         engine = DownloadEngine.getInstance(this)
 

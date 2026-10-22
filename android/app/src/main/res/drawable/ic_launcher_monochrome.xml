@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Sahm Monochrome Icon for Android 13+ (API 33+) Themed Icons -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,28 L74,30 L76,50 L54,82 L32,50 L34,30 Z M54,40 L62,52 L58,52 L58,66 L50,66 L50,52 L46,52 Z" />
+</vector>

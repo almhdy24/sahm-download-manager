@@ -322,10 +322,115 @@ android {
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.okhttp)
 }`
+  },
+  {
+    path: 'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
+    category: 'Android Res & Manifest',
+    content: `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Sahm Adaptive Icon Foreground (Pure White with Negative-Space Core) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,28 L74,30 L76,50 L54,82 L32,50 L34,30 Z M54,40 L62,52 L58,52 L58,66 L50,66 L50,52 L46,52 Z" />
+</vector>`
+  },
+  {
+    path: 'android/app/src/main/res/drawable/ic_launcher_background.xml',
+    category: 'Android Res & Manifest',
+    content: `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#166534"
+        android:pathData="M0,0h108v108h-108z" />
+</vector>`
+  },
+  {
+    path: 'android/app/src/main/res/drawable/ic_launcher_monochrome.xml',
+    category: 'Android Res & Manifest',
+    content: `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,28 L74,30 L76,50 L54,82 L32,50 L34,30 Z M54,40 L62,52 L58,52 L58,66 L50,66 L50,52 L46,52 Z" />
+</vector>`
+  },
+  {
+    path: 'android/app/src/main/res/drawable/ic_splash_logo.xml',
+    category: 'Android Res & Manifest',
+    content: `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#166534"
+        android:fillType="evenOdd"
+        android:pathData="M54,28 L74,30 L76,50 L54,82 L32,50 L34,30 Z M54,40 L62,52 L58,52 L58,66 L50,66 L50,52 L46,52 Z" />
+</vector>`
+  },
+  {
+    path: 'android/app/src/main/res/values/themes.xml',
+    category: 'Android Res & Manifest',
+    content: `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SahmDownloadManager" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <style name="Theme.SahmDownloadManager.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/background_light</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.SahmDownloadManager</item>
+    </style>
+</resources>`
+  },
+  {
+    path: 'android/keystore.properties.example',
+    category: 'Gradle & Config',
+    content: `# Sahm Download Manager — Release Signing Template
+SAHM_KEYSTORE_PATH=sahm-release.keystore
+SAHM_KEYSTORE_PASSWORD=YOUR_KEYSTORE_PASSWORD
+SAHM_KEY_ALIAS=sahm_release_key
+SAHM_KEY_PASSWORD=YOUR_KEY_PASSWORD`
+  },
+  {
+    path: '.github/workflows/android-build.yml',
+    category: 'Gradle & Config',
+    content: `name: Sahm Download Manager — Android CI & Release Build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - run: cd android && ./gradlew assembleDebug`
   }
 ];
 

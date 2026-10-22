@@ -8,27 +8,29 @@ import com.sahm.downloadmanager.data.preferences.UserPreferencesRepository
 import com.sahm.downloadmanager.service.DownloadForegroundService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Queue coordinator that strictly respects user concurrency limits,
- * handles process restarts, and dispatches download tasks safely.
+ * Advanced Queue coordinator that strictly respects user concurrency limits,
+ * supports queue reordering (Move Up, Down, Front), smart exponential retry for
+ * transient errors, aggregate bandwidth throttling, and distinction between record
+ * cleanup versus physical file deletion.
  */
 class DownloadQueueManager(
     private val context: Context,
-    private val downloadDao: DownloadDao,
-    private val preferencesRepository: UserPreferencesRepository,
-    private val networkObserver: NetworkObserver,
-    private val storageHelper: StorageHelper,
-    private val downloader: HttpDownloader = HttpDownloader()
+    val downloadDao: DownloadDao,
+    val preferencesRepository: UserPreferencesRepository,
+    val networkObserver: NetworkObserver,
+    val storageHelper: StorageHelper,
+    val downloader: HttpDownloader = HttpDownloader()
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val activeJobs = ConcurrentHashMap<String, Job>()
 
     init {
-        // Recover state after process recreation:
-        // Set tasks that were left in CONNECTING/DOWNLOADING back to PAUSED
         scope.launch {
+            // Recover state after process recreation:
             downloadDao.pauseAllActiveDownloads()
             processQueueLoop()
         }
@@ -63,22 +65,23 @@ class DownloadQueueManager(
     private fun startTaskInternal(task: DownloadEntity) {
         val job = scope.launch {
             try {
-                // Ensure foreground service is running for persistent background execution
                 DownloadForegroundService.startService(context)
-
                 downloadDao.updateStatus(task.id, DownloadStatus.CONNECTING)
 
                 val tempFile = storageHelper.getTempFile(task.id)
+                val speedLimit = preferencesRepository.speedLimitBytesPerSec.value
 
                 val result = downloader.download(
                     download = task,
                     tempFile = tempFile,
+                    speedLimitBytesPerSec = speedLimit,
                     onProgress = { progress ->
                         downloadDao.updateProgress(
                             id = task.id,
                             downloadedBytes = progress.downloadedBytes,
                             totalBytes = progress.totalBytes,
                             speed = progress.speedBytesPerSec,
+                            avgSpeed = progress.averageSpeedBytesPerSec,
                             eta = progress.etaSeconds
                         )
                         downloadDao.update(
@@ -86,11 +89,13 @@ class DownloadQueueManager(
                                 downloadedBytes = progress.downloadedBytes,
                                 totalBytes = progress.totalBytes,
                                 speedBytesPerSec = progress.speedBytesPerSec,
+                                averageSpeedBytesPerSec = progress.averageSpeedBytesPerSec,
                                 etaSeconds = progress.etaSeconds,
                                 isResumable = progress.isResumable,
                                 fileName = progress.fileName ?: task.fileName,
                                 mimeType = progress.mimeType ?: task.mimeType,
-                                status = DownloadStatus.DOWNLOADING
+                                status = DownloadStatus.DOWNLOADING,
+                                lastHttpStatus = progress.httpStatusCode
                             )
                         )
                     }
@@ -111,25 +116,43 @@ class DownloadQueueManager(
                         finalPath = finalPath
                     )
                 } else {
-                    val error = result.exceptionOrNull()?.message ?: "Download failed"
-                    downloadDao.updateStatus(task.id, DownloadStatus.FAILED, errorMessage = error)
+                    val error = result.exceptionOrNull()
+                    handleDownloadFailure(task, error)
                 }
             } catch (e: CancellationException) {
-                // User-initiated pause or cancel
+                // User pause/cancel
             } catch (e: Exception) {
-                downloadDao.updateStatus(task.id, DownloadStatus.FAILED, errorMessage = e.localizedMessage)
+                handleDownloadFailure(task, e)
             } finally {
                 activeJobs.remove(task.id)
-                // If no more active tasks, foreground service can stop itself
                 if (activeJobs.isEmpty()) {
                     DownloadForegroundService.stopService(context)
                 }
-                // Trigger queue check for next waiting task
                 triggerNextQueueItem()
             }
         }
 
         activeJobs[task.id] = job
+    }
+
+    private suspend fun handleDownloadFailure(task: DownloadEntity, error: Throwable?) {
+        val message = error?.message ?: "Download failed"
+        val isTransient = error is TransientNetworkException
+        val autoRetry = preferencesRepository.autoRetryTransient.value
+
+        if (isTransient && autoRetry && task.retryCount < 3) {
+            val backoffMs = 1500L * (1 shl task.retryCount)
+            downloadDao.update(
+                task.copy(
+                    status = DownloadStatus.QUEUED,
+                    retryCount = task.retryCount + 1,
+                    errorMessage = "$message (Auto-retrying in ${backoffMs / 1000}s...)"
+                )
+            )
+            delay(backoffMs)
+        } else {
+            downloadDao.updateStatus(task.id, DownloadStatus.FAILED, errorMessage = message)
+        }
     }
 
     fun pauseDownload(id: String) {
@@ -138,6 +161,14 @@ class DownloadQueueManager(
         scope.launch {
             downloadDao.updateStatus(id, DownloadStatus.PAUSED)
             triggerNextQueueItem()
+        }
+    }
+
+    fun pauseAllActive() {
+        activeJobs.values.forEach { it.cancel() }
+        activeJobs.clear()
+        scope.launch {
+            downloadDao.pauseAllActiveDownloads()
         }
     }
 
@@ -150,15 +181,9 @@ class DownloadQueueManager(
         }
     }
 
-    fun cancelDownload(id: String) {
-        activeJobs[id]?.cancel()
-        activeJobs.remove(id)
+    fun resumeAllPaused() {
         scope.launch {
-            downloadDao.updateStatus(id, DownloadStatus.CANCELLED)
-            // Cleanup temp file
-            val tempFile = storageHelper.getTempFile(id)
-            if (tempFile.exists()) tempFile.delete()
-            triggerNextQueueItem()
+            downloadDao.resumeAllPausedDownloads()
         }
     }
 
@@ -173,6 +198,76 @@ class DownloadQueueManager(
                 )
             )
         }
+    }
+
+    fun retryAllFailed() {
+        scope.launch {
+            val failedList = downloadDao.getFailedDownloads()
+            for (item in failedList) {
+                downloadDao.update(
+                    item.copy(
+                        status = DownloadStatus.QUEUED,
+                        errorMessage = null,
+                        retryCount = item.retryCount + 1
+                    )
+                )
+            }
+        }
+    }
+
+    fun cancelDownload(id: String) {
+        activeJobs[id]?.cancel()
+        activeJobs.remove(id)
+        scope.launch {
+            downloadDao.updateStatus(id, DownloadStatus.CANCELLED)
+            val tempFile = storageHelper.getTempFile(id)
+            if (tempFile.exists()) tempFile.delete()
+            triggerNextQueueItem()
+        }
+    }
+
+    // Queue reordering
+    fun moveTaskUp(id: String) {
+        scope.launch {
+            val item = downloadDao.getDownloadById(id) ?: return@launch
+            downloadDao.updateQueuePriority(id, item.queuePriority + 1)
+        }
+    }
+
+    fun moveTaskDown(id: String) {
+        scope.launch {
+            val item = downloadDao.getDownloadById(id) ?: return@launch
+            downloadDao.updateQueuePriority(id, item.queuePriority - 1)
+        }
+    }
+
+    fun moveTaskToFront(id: String) {
+        scope.launch {
+            val maxPriority = downloadDao.getMaxQueuePriority() ?: 0
+            downloadDao.updateQueuePriority(id, maxPriority + 1)
+        }
+    }
+
+    // Deletion: clear history vs delete physical file
+    suspend fun removeRecordOnly(id: String) {
+        cancelDownload(id)
+        downloadDao.deleteById(id)
+    }
+
+    suspend fun removeRecordAndFile(id: String) {
+        val download = downloadDao.getDownloadById(id)
+        cancelDownload(id)
+        download?.finalFilePath?.let { path ->
+            if (!path.startsWith("content://")) {
+                val f = File(path)
+                if (f.exists()) f.delete()
+            }
+        }
+        downloadDao.deleteById(id)
+    }
+
+    suspend fun clearCompletedHistoryOnly() {
+        downloadDao.clearCompleted()
     }
 
     private fun triggerNextQueueItem() {

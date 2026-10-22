@@ -1,9 +1,24 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+// Secret & Signing Resolution (Phase 8: Environment variables or local keystore.properties)
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
+}
+
+val sahmKeystorePath = System.getenv("SAHM_KEYSTORE_PATH") ?: keystoreProperties.getProperty("SAHM_KEYSTORE_PATH")
+val sahmKeystorePassword = System.getenv("SAHM_KEYSTORE_PASSWORD") ?: keystoreProperties.getProperty("SAHM_KEYSTORE_PASSWORD")
+val sahmKeyAlias = System.getenv("SAHM_KEY_ALIAS") ?: keystoreProperties.getProperty("SAHM_KEY_ALIAS")
+val sahmKeyPassword = System.getenv("SAHM_KEY_PASSWORD") ?: keystoreProperties.getProperty("SAHM_KEY_PASSWORD")
 
 android {
     namespace = "com.sahm.downloadmanager"
@@ -26,6 +41,23 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (!sahmKeystorePath.isNullOrBlank() && 
+                !sahmKeystorePassword.isNullOrBlank() && 
+                !sahmKeyAlias.isNullOrBlank() && 
+                !sahmKeyPassword.isNullOrBlank()) {
+                val resolvedKeyFile = file(sahmKeystorePath)
+                if (resolvedKeyFile.exists()) {
+                    storeFile = resolvedKeyFile
+                    storePassword = sahmKeystorePassword
+                    keyAlias = sahmKeyAlias
+                    keyPassword = sahmKeyPassword
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -34,6 +66,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null && releaseSigning.storeFile!!.exists()) {
+                signingConfig = releaseSigning
+            }
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -67,6 +103,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)

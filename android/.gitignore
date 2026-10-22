@@ -1,0 +1,33 @@
+# Built application files
+*.apk
+*.aar
+*.aab
+
+# Gradle files
+.gradle/
+build/
+app/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Android Studio / IntelliJ files
+.idea/
+*.iml
+.navigation/
+
+# Keystore and Release Signing Secrets (NEVER COMMIT TO VCS)
+*.keystore
+*.jks
+*.p12
+*.bks
+keystore.properties
+signing.properties
+
+# Google Play Publishing & Cloud service accounts
+play-*.json
+google-services.json
+
+# OS files
+.DS_Store
+Thumbs.db

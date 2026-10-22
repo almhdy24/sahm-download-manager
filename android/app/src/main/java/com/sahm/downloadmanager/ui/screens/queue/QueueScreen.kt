@@ -1,10 +1,16 @@
 package com.sahm.downloadmanager.ui.screens.queue
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -24,7 +30,10 @@ fun QueueScreen(
     queuedDownloads: List<DownloadEntity>,
     maxConcurrent: Int,
     onCancel: (String) -> Unit,
-    onClearQueue: () -> Unit
+    onClearQueue: () -> Unit,
+    onMoveUp: (String) -> Unit = {},
+    onMoveDown: (String) -> Unit = {},
+    onMoveToFront: (String) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -92,27 +101,45 @@ fun QueueScreen(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 itemsIndexed(queuedDownloads, key = { _, item -> item.id }) { index, item ->
+                    val isFirst = index == 0
+                    val isLast = index == queuedDownloads.size - 1
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "#${index + 1}",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(28.dp)
+                            modifier = Modifier.width(26.dp)
                         )
 
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = item.fileName,
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = item.fileName,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                if (item.queuePriority > 0) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "+${item.queuePriority}",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(2.dp))
+                                            .border(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
                             Text(
                                 text = item.url,
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, fontFamily = FontFamily.Monospace),
@@ -122,9 +149,49 @@ fun QueueScreen(
                             )
                         }
 
+                        // Priority buttons: Move To Front, Up, Down
+                        IconButton(
+                            onClick = { onMoveToFront(item.id) },
+                            enabled = !isFirst,
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardDoubleArrowUp,
+                                contentDescription = "Move to Front",
+                                modifier = Modifier.size(16.dp),
+                                tint = if (!isFirst) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { onMoveUp(item.id) },
+                            enabled = !isFirst,
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Move Up",
+                                modifier = Modifier.size(16.dp),
+                                tint = if (!isFirst) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { onMoveDown(item.id) },
+                            enabled = !isLast,
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Move Down",
+                                modifier = Modifier.size(16.dp),
+                                tint = if (!isLast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+
                         IconButton(
                             onClick = { onCancel(item.id) },
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(26.dp)
                         ) {
                             Icon(
                                 Icons.Default.Close,

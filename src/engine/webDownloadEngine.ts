@@ -1,4 +1,4 @@
-import { DownloadStatus, DownloadTask, UserSettings, SampleDownloadItem } from '../types/download';
+import { DownloadStatus, DownloadTask, UserSettings, SampleDownloadItem, UrlProbeResult, BatchParseResult } from '../types/download';
 
 export const SAMPLE_DOWNLOADS: SampleDownloadItem[] = [
   {
@@ -36,7 +36,9 @@ class WebDownloadEngine {
     theme: 'dark',
     maxConcurrent: 3,
     wifiOnly: false,
-    simulatedNetwork: 'wifi'
+    simulatedNetwork: 'wifi',
+    speedLimitBytesPerSec: 0,
+    autoRetryTransient: true
   };
 
   constructor() {
@@ -49,7 +51,6 @@ class WebDownloadEngine {
       if (savedTasks) {
         const parsed: DownloadTask[] = JSON.parse(savedTasks);
         parsed.forEach(t => {
-          // If was downloading/connecting during reload, reset to PAUSED
           if (t.status === 'DOWNLOADING' || t.status === 'CONNECTING') {
             t.status = 'PAUSED';
             t.speedBytesPerSec = 0;
@@ -95,7 +96,16 @@ class WebDownloadEngine {
   }
 
   getAllTasks(): DownloadTask[] {
-    return Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
+    return Array.from(this.tasks.values()).sort((a, b) => {
+      // If both are queued, respect queuePriority DESC, then createdAt ASC
+      if (a.status === 'QUEUED' && b.status === 'QUEUED') {
+        const prioA = a.queuePriority || 0;
+        const prioB = b.queuePriority || 0;
+        if (prioA !== prioB) return prioB - prioA;
+        return a.createdAt - b.createdAt;
+      }
+      return b.createdAt - a.createdAt;
+    });
   }
 
   getSettings(): UserSettings {
@@ -105,7 +115,6 @@ class WebDownloadEngine {
   updateSettings(newSettings: Partial<UserSettings>) {
     this.settings = { ...this.settings, ...newSettings };
     this.saveState();
-    // If wifi-only turned on while on cellular, pause running downloads
     if (this.settings.wifiOnly && this.settings.simulatedNetwork === 'cellular') {
       this.pauseAllActive('Paused: Wi-Fi only mode active on cellular network');
     } else {
@@ -113,13 +122,108 @@ class WebDownloadEngine {
     }
   }
 
-  enqueue(url: string, customName?: string): { success: boolean; message?: string } {
+  async probeUrl(url: string): Promise<UrlProbeResult> {
+    const cleanUrl = url.trim();
+    const parsed = new URL(cleanUrl);
+    const hostname = parsed.hostname;
+
+    try {
+      const response = await fetch(cleanUrl, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' }
+      });
+
+      const disposition = response.headers.get('Content-Disposition');
+      const fileName = (disposition && this.extractFileNameFromDisposition(disposition)) || this.extractFileName(cleanUrl);
+      const isResumable = response.status === 206 || (response.headers.get('Accept-Ranges')?.includes('bytes') ?? false);
+      const mimeType = response.headers.get('Content-Type') || this.guessMimeType(fileName);
+
+      let totalBytes = -1;
+      const contentRange = response.headers.get('Content-Range');
+      if (contentRange) {
+        const parts = contentRange.split('/');
+        if (parts.length > 1) {
+          totalBytes = parseInt(parts[1], 10) || -1;
+        }
+      }
+      if (totalBytes <= 0) {
+        const cl = response.headers.get('Content-Length');
+        if (cl) totalBytes = parseInt(cl, 10);
+      }
+
+      return {
+        url: cleanUrl,
+        hostname,
+        fileName,
+        totalBytes,
+        mimeType,
+        isResumable,
+        httpStatusCode: response.status
+      };
+    } catch {
+      // Fallback probe
+      const fileName = this.extractFileName(cleanUrl);
+      return {
+        url: cleanUrl,
+        hostname,
+        fileName,
+        totalBytes: -1,
+        mimeType: this.guessMimeType(fileName),
+        isResumable: true,
+        httpStatusCode: 200
+      };
+    }
+  }
+
+  parseBatchUrls(rawText: string): BatchParseResult {
+    const lines = rawText.split(/[\r\n]+/)
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    const validUrls: string[] = [];
+    const duplicateUrls: string[] = [];
+    const invalidLines: string[] = [];
+    const seen = new Set<string>();
+
+    for (const line of lines) {
+      if (!line.startsWith('http://') && !line.startsWith('https://')) {
+        invalidLines.push(line);
+        continue;
+      }
+
+      if (seen.has(line)) {
+        duplicateUrls.push(line);
+        continue;
+      }
+
+      // Check existing active or queued tasks
+      const existing = Array.from(this.tasks.values()).find(
+        t => t.url === line && (t.status === 'DOWNLOADING' || t.status === 'QUEUED')
+      );
+      if (existing) {
+        duplicateUrls.push(line);
+        continue;
+      }
+
+      seen.add(line);
+      validUrls.push(line);
+    }
+
+    return { validUrls, duplicateUrls, invalidLines };
+  }
+
+  enqueue(
+    url: string, 
+    customName?: string, 
+    detectedSize: number = -1, 
+    detectedMime?: string,
+    isResumable: boolean = true
+  ): { success: boolean; message?: string } {
     const cleanUrl = url.trim();
     if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
       return { success: false, message: 'URL must start with http:// or https://' };
     }
 
-    // Check duplicate
     const existing = Array.from(this.tasks.values()).find(
       t => t.url === cleanUrl && (t.status === 'DOWNLOADING' || t.status === 'QUEUED')
     );
@@ -134,20 +238,59 @@ class WebDownloadEngine {
       id,
       url: cleanUrl,
       fileName,
-      mimeType: this.guessMimeType(fileName),
-      totalBytes: -1,
+      mimeType: detectedMime || this.guessMimeType(fileName),
+      totalBytes: detectedSize,
       downloadedBytes: 0,
       status: 'QUEUED',
-      isResumable: true,
+      isResumable,
       speedBytesPerSec: 0,
+      averageSpeedBytesPerSec: 0,
       etaSeconds: -1,
       retryCount: 0,
+      queuePriority: 0,
       createdAt: Date.now()
     };
 
     this.tasks.set(id, task);
     this.notify();
     return { success: true };
+  }
+
+  enqueueBatch(urls: string[]): number {
+    let count = 0;
+    for (const url of urls) {
+      const res = this.enqueue(url);
+      if (res.success) count++;
+    }
+    return count;
+  }
+
+  // Queue prioritization
+  moveUp(id: string) {
+    const task = this.tasks.get(id);
+    if (task && task.status === 'QUEUED') {
+      task.queuePriority = (task.queuePriority || 0) + 1;
+      this.notify();
+    }
+  }
+
+  moveDown(id: string) {
+    const task = this.tasks.get(id);
+    if (task && task.status === 'QUEUED') {
+      task.queuePriority = (task.queuePriority || 0) - 1;
+      this.notify();
+    }
+  }
+
+  moveToFront(id: string) {
+    const task = this.tasks.get(id);
+    if (task && task.status === 'QUEUED') {
+      const maxPrio = Array.from(this.tasks.values())
+        .filter(t => t.status === 'QUEUED')
+        .reduce((max, t) => Math.max(max, t.queuePriority || 0), 0);
+      task.queuePriority = maxPrio + 1;
+      this.notify();
+    }
   }
 
   private processQueue() {
@@ -164,7 +307,12 @@ class WebDownloadEngine {
 
     const queuedTasks = Array.from(this.tasks.values())
       .filter(t => t.status === 'QUEUED')
-      .sort((a, b) => a.createdAt - b.createdAt)
+      .sort((a, b) => {
+        const prioA = a.queuePriority || 0;
+        const prioB = b.queuePriority || 0;
+        if (prioA !== prioB) return prioB - prioA;
+        return a.createdAt - b.createdAt;
+      })
       .slice(0, availableSlots);
 
     for (const task of queuedTasks) {
@@ -177,6 +325,7 @@ class WebDownloadEngine {
     if (!task) return;
 
     task.status = 'CONNECTING';
+    task.startedAt = task.startedAt || Date.now();
     task.errorMessage = undefined;
     this.notify();
 
@@ -187,7 +336,6 @@ class WebDownloadEngine {
       const headers: Record<string, string> = {};
       const existingBytes = task.downloadedBytes;
 
-      // Range request for resumable download
       if (existingBytes > 0 && task.isResumable) {
         headers['Range'] = `bytes=${existingBytes}-`;
       }
@@ -196,6 +344,8 @@ class WebDownloadEngine {
         headers,
         signal: controller.signal
       });
+
+      task.lastHttpStatus = response.status;
 
       if (!response.ok && response.status !== 206) {
         throw new Error(`Server returned HTTP ${response.status}: ${response.statusText}`);
@@ -211,7 +361,6 @@ class WebDownloadEngine {
         task.totalBytes = isPartial ? existingBytes + chunkLen : chunkLen;
       }
 
-      // Check Content-Disposition for accurate filename
       const disposition = response.headers.get('Content-Disposition');
       if (disposition) {
         const serverName = this.extractFileNameFromDisposition(disposition);
@@ -220,7 +369,6 @@ class WebDownloadEngine {
 
       task.mimeType = response.headers.get('Content-Type') || task.mimeType;
 
-      // If server returned 200 OK while we asked for Range, restart from 0
       let startByte = existingBytes;
       if (!isPartial && existingBytes > 0) {
         startByte = 0;
@@ -232,7 +380,6 @@ class WebDownloadEngine {
 
       const reader = response.body?.getReader();
       if (!reader) {
-        // Fallback for simple response
         const blob = await response.blob();
         task.downloadedBytes = blob.size;
         task.totalBytes = blob.size;
@@ -246,6 +393,7 @@ class WebDownloadEngine {
 
       let currentDownloaded = startByte;
       let lastTimestamp = Date.now();
+      const sessionStart = Date.now();
       let bytesSinceLast = 0;
       let smoothedSpeed = 0;
       const chunks: Uint8Array[] = [];
@@ -258,12 +406,24 @@ class WebDownloadEngine {
         currentDownloaded += value.length;
         bytesSinceLast += value.length;
 
+        // Apply bandwidth speed limiter if set
+        const speedLimit = this.settings.speedLimitBytesPerSec;
+        if (speedLimit > 0) {
+          const expectedMs = (value.length * 1000) / speedLimit;
+          if (expectedMs > 2) {
+            await new Promise(r => setTimeout(r, expectedMs));
+          }
+        }
+
         const now = Date.now();
         const elapsed = now - lastTimestamp;
 
         if (elapsed >= 350) {
           const currentSpeed = (bytesSinceLast * 1000) / elapsed;
           smoothedSpeed = smoothedSpeed === 0 ? currentSpeed : Math.round((smoothedSpeed * 7 + currentSpeed * 3) / 10);
+
+          const totalElapsedSec = Math.max(1, Math.round((now - sessionStart) / 1000));
+          task.averageSpeedBytesPerSec = Math.round((currentDownloaded - startByte) / totalElapsedSec);
 
           task.downloadedBytes = currentDownloaded;
           task.speedBytesPerSec = smoothedSpeed;
@@ -279,7 +439,6 @@ class WebDownloadEngine {
         }
       }
 
-      // Finalize completed file
       const finalBlob = new Blob(chunks as BlobPart[], { type: task.mimeType });
       task.downloadedBytes = currentDownloaded;
       if (task.totalBytes <= 0) task.totalBytes = currentDownloaded;
@@ -291,13 +450,23 @@ class WebDownloadEngine {
       task.fileData = finalBlob;
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        // Handled via pause/cancel
         return;
       }
       task.status = 'FAILED';
       task.errorMessage = err.message || 'Network transfer error';
       task.speedBytesPerSec = 0;
       task.etaSeconds = -1;
+
+      // Smart auto-retry for transient errors
+      if (this.settings.autoRetryTransient && task.retryCount < 3) {
+        const backoff = 1500 * (1 << task.retryCount);
+        task.errorMessage = `${task.errorMessage} (Auto-retry #${task.retryCount + 1} in ${backoff / 1000}s)`;
+        setTimeout(() => {
+          if (task.status === 'FAILED') {
+            this.retry(id);
+          }
+        }, backoff);
+      }
     } finally {
       this.abortControllers.delete(id);
       this.notify();
@@ -336,6 +505,36 @@ class WebDownloadEngine {
     this.notify();
   }
 
+  resumeAllPaused() {
+    for (const task of this.tasks.values()) {
+      if (task.status === 'PAUSED') {
+        task.status = 'QUEUED';
+        task.errorMessage = undefined;
+      }
+    }
+    this.notify();
+  }
+
+  retry(id: string) {
+    const task = this.tasks.get(id);
+    if (!task) return;
+    task.status = 'QUEUED';
+    task.errorMessage = undefined;
+    task.retryCount += 1;
+    this.notify();
+  }
+
+  retryAllFailed() {
+    for (const task of this.tasks.values()) {
+      if (task.status === 'FAILED') {
+        task.status = 'QUEUED';
+        task.errorMessage = undefined;
+        task.retryCount += 1;
+      }
+    }
+    this.notify();
+  }
+
   cancel(id: string) {
     if (this.abortControllers.has(id)) {
       this.abortControllers.get(id)?.abort();
@@ -350,16 +549,17 @@ class WebDownloadEngine {
     this.notify();
   }
 
-  retry(id: string) {
-    const task = this.tasks.get(id);
-    if (!task) return;
-    task.status = 'QUEUED';
-    task.errorMessage = undefined;
-    task.retryCount += 1;
+  removeRecordOnly(id: string) {
+    this.cancel(id);
+    this.tasks.delete(id);
     this.notify();
   }
 
   delete(id: string) {
+    this.removeRecordAndFile(id);
+  }
+
+  removeRecordAndFile(id: string) {
     this.cancel(id);
     const task = this.tasks.get(id);
     if (task?.blobUrl) {
@@ -369,19 +569,19 @@ class WebDownloadEngine {
     this.notify();
   }
 
-  clearQueue() {
+  clearCompleted() {
     for (const [id, task] of this.tasks.entries()) {
-      if (task.status === 'QUEUED') {
+      if (task.status === 'COMPLETED') {
+        if (task.blobUrl) URL.revokeObjectURL(task.blobUrl);
         this.tasks.delete(id);
       }
     }
     this.notify();
   }
 
-  clearCompleted() {
+  clearQueue() {
     for (const [id, task] of this.tasks.entries()) {
-      if (task.status === 'COMPLETED') {
-        if (task.blobUrl) URL.revokeObjectURL(task.blobUrl);
+      if (task.status === 'QUEUED') {
         this.tasks.delete(id);
       }
     }
@@ -421,7 +621,7 @@ class WebDownloadEngine {
           url: task.url
         });
         return true;
-      } catch (e) {
+      } catch {
         return false;
       }
     }
@@ -436,19 +636,17 @@ class WebDownloadEngine {
       if (last && last.includes('.')) {
         return decodeURIComponent(last).replace(/[\\/:*?"<>|]/g, '_');
       }
-    } catch (e) {}
+    } catch {}
     return `sahm_download_${Date.now()}.bin`;
   }
 
   private extractFileNameFromDisposition(header: string): string | null {
-    // 1. RFC 5987 filename*=UTF-8''
     const utf8Match = header.match(/filename\*=UTF-8''([^;\n]+)/i);
     if (utf8Match && utf8Match[1]) {
       try {
         return decodeURIComponent(utf8Match[1]).replace(/[\\/:*?"<>|]/g, '_');
-      } catch (e) {}
+      } catch {}
     }
-    // 2. filename="name"
     const match = header.match(/filename="?([^";\n]+)"?/i);
     if (match && match[1]) {
       return match[1].trim().replace(/[\\/:*?"<>|]/g, '_');

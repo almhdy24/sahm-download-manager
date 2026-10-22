@@ -6,3 +6,16 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Android & Release Secrets
+*.apk
+*.aab
+*.keystore
+*.jks
+*.p12
+*.bks
+keystore.properties
+signing.properties
+play-*.json
+local.properties
+.gradle/

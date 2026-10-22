@@ -4,15 +4,17 @@ import android.net.Uri
 import com.sahm.downloadmanager.data.local.DownloadEntity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.RandomAccessFile
+import java.net.SocketTimeoutException
 import java.net.URLDecoder
+import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
@@ -20,7 +22,8 @@ import java.util.regex.Pattern
 /**
  * High-performance streaming HTTP downloader for Sahm Download Manager.
  * Supports resume via HTTP Range headers, chunked streaming to disk,
- * robust unicode/Arabic filename extraction, and rolling transfer speed calculation.
+ * robust unicode/Arabic filename extraction, pre-download probing,
+ * transient error categorization, and strict aggregate speed limiting.
  */
 class HttpDownloader(
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -34,18 +37,85 @@ class HttpDownloader(
         val downloadedBytes: Long,
         val totalBytes: Long,
         val speedBytesPerSec: Long,
+        val averageSpeedBytesPerSec: Long,
         val etaSeconds: Long,
         val isResumable: Boolean,
         val fileName: String? = null,
-        val mimeType: String? = null
+        val mimeType: String? = null,
+        val httpStatusCode: Int = 200
+    )
+
+    data class UrlMetadata(
+        val url: String,
+        val hostname: String,
+        val fileName: String,
+        val totalBytes: Long,
+        val mimeType: String,
+        val isResumable: Boolean,
+        val httpStatusCode: Int
     )
 
     /**
-     * Executes the download with real chunked streaming and HTTP Range support.
+     * Probes remote HTTP headers (HEAD or Range request) to preview metadata
+     * for the pre-download confirmation screen without downloading the body.
+     */
+    suspend fun probeUrlMetadata(url: String): Result<UrlMetadata> = withContext(Dispatchers.IO) {
+        try {
+            val uri = Uri.parse(url)
+            val hostname = uri.host ?: "remote"
+
+            // Send a lightweight Range: bytes=0-0 request
+            val request = Request.Builder()
+                .url(url)
+                .header("Range", "bytes=0-0")
+                .build()
+
+            val response: Response = client.newCall(request).execute()
+            val code = response.code
+
+            if (code >= 400 && code != 416) {
+                return@withContext Result.failure(
+                    classifyHttpError(code, "Server returned HTTP $code: ${response.message}")
+                )
+            }
+
+            val acceptRanges = response.header("Accept-Ranges")
+            val isResumable = code == 206 || (acceptRanges != null && acceptRanges.contains("bytes", ignoreCase = true))
+
+            val disposition = response.header("Content-Disposition")
+            val fileName = extractFileName(url, disposition)
+            val mimeType = response.header("Content-Type") ?: "application/octet-stream"
+
+            val totalBytes = parseTotalFromContentRange(response.header("Content-Range"))
+                ?: response.body?.contentLength()
+                ?: -1L
+
+            response.close()
+
+            Result.success(
+                UrlMetadata(
+                    url = url,
+                    hostname = hostname,
+                    fileName = fileName,
+                    totalBytes = totalBytes,
+                    mimeType = mimeType,
+                    isResumable = isResumable,
+                    httpStatusCode = code
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(classifyException(e))
+        }
+    }
+
+    /**
+     * Executes the download with real chunked streaming, HTTP Range support,
+     * and optional bandwidth speed limiting.
      */
     suspend fun download(
         download: DownloadEntity,
         tempFile: File,
+        speedLimitBytesPerSec: Long = 0L,
         onProgress: suspend (ProgressUpdate) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         var inputStream: InputStream? = null
@@ -55,7 +125,6 @@ class HttpDownloader(
             val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
             val requestBuilder = Request.Builder().url(download.url)
 
-            // Request byte range if existing partial file exists and previous check allowed resume
             if (existingBytes > 0 && download.isResumable) {
                 requestBuilder.header("Range", "bytes=$existingBytes-")
                 download.etag?.let { etag ->
@@ -65,35 +134,32 @@ class HttpDownloader(
 
             val request = requestBuilder.build()
             val response: Response = client.newCall(request).execute()
+            val statusCode = response.code
 
-            if (!response.isSuccessful) {
+            if (!response.isSuccessful && statusCode != 206) {
                 return@withContext Result.failure(
-                    HttpDownloadException("Server returned HTTP ${response.code}: ${response.message}")
+                    classifyHttpError(statusCode, "Server returned HTTP $statusCode: ${response.message}")
                 )
             }
 
             val body = response.body ?: return@withContext Result.failure(
-                HttpDownloadException("Empty response body from server")
+                PermanentDownloadException("Empty response body from server")
             )
 
-            val statusCode = response.code
             val isPartial = statusCode == 206
             val acceptRanges = response.header("Accept-Ranges")
             val isResumable = isPartial || (acceptRanges != null && acceptRanges.contains("bytes", ignoreCase = true))
 
-            // Parse server file name and mime type
             val contentDisposition = response.header("Content-Disposition")
             val parsedFileName = extractFileName(download.url, contentDisposition)
             val mimeType = body.contentType()?.toString() ?: download.mimeType
 
-            // Total bytes determination
             val totalBytes = if (isPartial) {
                 parseTotalFromContentRange(response.header("Content-Range")) ?: (existingBytes + body.contentLength())
             } else {
                 body.contentLength()
             }
 
-            // If server returned 200 OK while we asked for Range, restart from zero to avoid corruption
             val startByte = if (isPartial && existingBytes > 0) existingBytes else 0L
             if (!isPartial && existingBytes > 0) {
                 tempFile.delete()
@@ -104,10 +170,12 @@ class HttpDownloader(
             randomAccessFile.seek(startByte)
             inputStream = body.byteStream()
 
-            val buffer = ByteArray(32 * 1024) // 32 KB chunk
+            val bufferSize = if (speedLimitBytesPerSec in 1..262144) 8 * 1024 else 32 * 1024
+            val buffer = ByteArray(bufferSize)
             var bytesRead: Int
             var currentDownloaded = startByte
             var lastUpdateTimestamp = System.currentTimeMillis()
+            val sessionStartTimestamp = System.currentTimeMillis()
             var bytesSinceLastUpdate = 0L
             var smoothedSpeed = 0L
 
@@ -116,13 +184,23 @@ class HttpDownloader(
                 currentDownloaded += bytesRead
                 bytesSinceLastUpdate += bytesRead
 
+                // Speed limiter rate-limiting enforcement
+                if (speedLimitBytesPerSec > 0) {
+                    val expectedMs = (bytesRead * 1000L) / speedLimitBytesPerSec
+                    if (expectedMs > 0) {
+                        delay(expectedMs)
+                    }
+                }
+
                 val now = System.currentTimeMillis()
                 val elapsed = now - lastUpdateTimestamp
 
-                // Throttle progress updates to ~300ms intervals to prevent database thrashing
                 if (elapsed >= 300) {
                     val currentSpeed = (bytesSinceLastUpdate * 1000) / elapsed
                     smoothedSpeed = if (smoothedSpeed == 0L) currentSpeed else ((smoothedSpeed * 7 + currentSpeed * 3) / 10)
+
+                    val totalElapsedSec = ((now - sessionStartTimestamp) / 1000L).coerceAtLeast(1L)
+                    val avgSpeed = (currentDownloaded - startByte) / totalElapsedSec
 
                     val etaSeconds = if (smoothedSpeed > 0 && totalBytes > currentDownloaded) {
                         (totalBytes - currentDownloaded) / smoothedSpeed
@@ -135,10 +213,12 @@ class HttpDownloader(
                             downloadedBytes = currentDownloaded,
                             totalBytes = totalBytes,
                             speedBytesPerSec = smoothedSpeed,
+                            averageSpeedBytesPerSec = avgSpeed,
                             etaSeconds = etaSeconds,
                             isResumable = isResumable,
                             fileName = parsedFileName,
-                            mimeType = mimeType
+                            mimeType = mimeType,
+                            httpStatusCode = statusCode
                         )
                     )
 
@@ -148,15 +228,20 @@ class HttpDownloader(
             }
 
             // Final progress update
+            val totalElapsedSec = ((System.currentTimeMillis() - sessionStartTimestamp) / 1000L).coerceAtLeast(1L)
+            val finalAvgSpeed = (currentDownloaded - startByte) / totalElapsedSec
+
             onProgress(
                 ProgressUpdate(
                     downloadedBytes = currentDownloaded,
                     totalBytes = if (totalBytes > 0) totalBytes else currentDownloaded,
                     speedBytesPerSec = 0,
+                    averageSpeedBytesPerSec = finalAvgSpeed,
                     etaSeconds = 0,
                     isResumable = isResumable,
                     fileName = parsedFileName,
-                    mimeType = mimeType
+                    mimeType = mimeType,
+                    httpStatusCode = statusCode
                 )
             )
 
@@ -164,7 +249,7 @@ class HttpDownloader(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(classifyException(e))
         } finally {
             runCatching { inputStream?.close() }
             runCatching { randomAccessFile?.close() }
@@ -172,13 +257,28 @@ class HttpDownloader(
     }
 
     companion object {
-        /**
-         * Safely extracts file name from Content-Disposition header (with RFC 5987 UTF-8 support)
-         * or falls back to URL path with sanitization for Unicode, Arabic, and ASCII.
-         */
+        fun classifyHttpError(code: Int, message: String): Exception {
+            return when (code) {
+                429 -> TransientNetworkException("Rate limit exceeded (HTTP 429). Retrying shortly.")
+                500, 502, 503, 504 -> TransientNetworkException("Server temporary error (HTTP $code). Retrying...")
+                401, 403 -> PermanentDownloadException("Access denied or authentication required (HTTP $code)")
+                404 -> PermanentDownloadException("File not found on remote server (HTTP 404)")
+                410 -> PermanentDownloadException("Download link has expired (HTTP 410)")
+                else -> if (code in 500..599) TransientNetworkException(message) else PermanentDownloadException(message)
+            }
+        }
+
+        fun classifyException(e: Exception): Exception {
+            return when (e) {
+                is SocketTimeoutException -> TransientNetworkException("Connection timed out. Retrying...")
+                is UnknownHostException -> TransientNetworkException("Unable to resolve server address. Check internet connection.")
+                is TransientNetworkException, is PermanentDownloadException -> e
+                else -> TransientNetworkException(e.localizedMessage ?: "Network transfer error")
+            }
+        }
+
         fun extractFileName(url: String, contentDisposition: String?): String {
             if (!contentDisposition.isNullOrBlank()) {
-                // 1. Try filename*=UTF-8''encoded_name (RFC 5987)
                 val utf8Pattern = Pattern.compile("filename\\*\\s*=\\s*UTF-8''([^;\\n]+)", Pattern.CASE_INSENSITIVE)
                 val utf8Matcher = utf8Pattern.matcher(contentDisposition)
                 if (utf8Matcher.find()) {
@@ -190,7 +290,6 @@ class HttpDownloader(
                     }
                 }
 
-                // 2. Try standard filename="name"
                 val standardPattern = Pattern.compile("filename\\s*=\\s*\"?([^;\"\\n]+)\"?", Pattern.CASE_INSENSITIVE)
                 val standardMatcher = standardPattern.matcher(contentDisposition)
                 if (standardMatcher.find()) {
@@ -201,7 +300,6 @@ class HttpDownloader(
                 }
             }
 
-            // 3. Fallback to extracting from URL path
             runCatching {
                 val uri = Uri.parse(url)
                 val pathSegment = uri.lastPathSegment
@@ -213,10 +311,6 @@ class HttpDownloader(
             return "download_${System.currentTimeMillis()}.bin"
         }
 
-        /**
-         * Sanitizes file names to remove forbidden filesystem characters
-         * while fully preserving Arabic and other Unicode text.
-         */
         fun sanitizeFileName(fileName: String): String {
             val sanitized = fileName.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim()
             return if (sanitized.isBlank() || sanitized == "." || sanitized == "..") {
@@ -226,9 +320,6 @@ class HttpDownloader(
             }
         }
 
-        /**
-         * Parses total bytes from 'Content-Range: bytes 0-1023/2048'
-         */
         fun parseTotalFromContentRange(contentRange: String?): Long? {
             if (contentRange == null) return null
             val slashIndex = contentRange.lastIndexOf('/')
@@ -241,4 +332,6 @@ class HttpDownloader(
     }
 }
 
-class HttpDownloadException(message: String) : Exception(message)
+open class HttpDownloadException(message: String) : Exception(message)
+class TransientNetworkException(message: String) : HttpDownloadException(message)
+class PermanentDownloadException(message: String) : HttpDownloadException(message)

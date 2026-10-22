@@ -17,11 +17,15 @@ export interface DownloadTask {
   status: DownloadStatus;
   isResumable: boolean;
   speedBytesPerSec: number;
+  averageSpeedBytesPerSec?: number;
   etaSeconds: number;
   errorMessage?: string;
   retryCount: number;
+  queuePriority?: number;
   createdAt: number;
+  startedAt?: number;
   completedAt?: number;
+  lastHttpStatus?: number;
   blobUrl?: string;
   fileData?: Blob;
 }
@@ -32,6 +36,8 @@ export interface UserSettings {
   maxConcurrent: number;
   wifiOnly: boolean;
   simulatedNetwork: 'wifi' | 'cellular';
+  speedLimitBytesPerSec: number; // 0 = Unlimited
+  autoRetryTransient: boolean;
 }
 
 export interface SampleDownloadItem {
@@ -39,4 +45,20 @@ export interface SampleDownloadItem {
   url: string;
   sizeLabel: string;
   type: string;
+}
+
+export interface UrlProbeResult {
+  url: string;
+  hostname: string;
+  fileName: string;
+  totalBytes: number;
+  mimeType: string;
+  isResumable: boolean;
+  httpStatusCode: number;
+}
+
+export interface BatchParseResult {
+  validUrls: string[];
+  duplicateUrls: string[];
+  invalidLines: string[];
 }
