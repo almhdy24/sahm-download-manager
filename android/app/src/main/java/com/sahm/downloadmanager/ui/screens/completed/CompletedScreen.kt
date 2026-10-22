@@ -234,14 +234,29 @@ fun CompletedScreen(
                         }
 
                         // One-tap Open, Share, and Delete
-                        IconButton(onClick = { onOpen(item) }, modifier = Modifier.size(30.dp), title = "Open file") {
-                            Icon(Icons.Outlined.FileDownload, contentDescription = stringResource(R.string.action_open), modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        IconButton(onClick = { onOpen(item) }, modifier = Modifier.size(30.dp)) {
+                            Icon(
+                                Icons.Outlined.FileDownload,
+                                contentDescription = stringResource(R.string.action_open),
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
-                        IconButton(onClick = { onShare(item) }, modifier = Modifier.size(30.dp), title = "Share file") {
-                            Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.action_share), modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        IconButton(onClick = { onShare(item) }, modifier = Modifier.size(30.dp)) {
+                            Icon(
+                                Icons.Outlined.Share,
+                                contentDescription = stringResource(R.string.action_share),
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        IconButton(onClick = { itemToDelete = item }, modifier = Modifier.size(30.dp), title = "Delete file") {
-                            Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.action_delete), modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        IconButton(onClick = { itemToDelete = item }, modifier = Modifier.size(30.dp)) {
+                            Icon(
+                                Icons.Outlined.Delete,
+                                contentDescription = stringResource(R.string.action_delete),
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
