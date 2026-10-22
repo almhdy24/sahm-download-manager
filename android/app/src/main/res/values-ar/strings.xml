@@ -96,6 +96,11 @@
     <string name="settings_section_network">الشبكة وقائمة الانتظار</string>
     <string name="settings_max_concurrent">أقصى عدد للتنزيلات المتزامنة</string>
     <string name="settings_max_concurrent_desc">عدد الملفات الجاري تنزيلها في نفس اللحظة</string>
+    <string name="settings_speed_limit">حد سرعة التنزيل</string>
+    <string name="settings_speed_limit_desc">اختر حدًا لسرعة الإنترنت لتقليل استهلاك النطاق</string>
+    <string name="settings_speed_unlimited">غير محدود</string>
+    <string name="settings_auto_retry">إعادة المحاولة تلقائياً عند فشل مؤقت</string>
+    <string name="settings_auto_retry_desc">إعادة تنزيل الملفات تلقائياً عند حدوث خطأ مؤقت في الشبكة أو الخادم</string>
     <string name="settings_wifi_only">التنزيل عبر واي فاي فقط</string>
     <string name="settings_wifi_only_desc">إيقاف التنزيلات مؤقتاً عند استخدام باقة بيانات الهاتف</string>
 
@@ -105,7 +110,7 @@
 
     <string name="settings_section_privacy">حول التطبيق والمطور</string>
     <string name="settings_privacy_title">بدون تتبع وخالٍ من الإعلانات</string>
-    <string name="settings_privacy_desc">سهم تطبيق مستقل خالٍ تماماً من الإعلانات، بدون أي تتبع أو حسابات سحابية. جميع السجلات تحفظ محلياً على جهازك في قاعدة بيانات Room.</string>
+    <string name="settings_privacy_desc">سهم تطبيق مستقل خالٍ تماماً من الإعلانات، بدون أي تتبع أو حسابات سحابية. جميع البيانات تبقى محلية في قاعدة Room.</string>
     <string name="settings_developer_title">المطور</string>
     <string name="settings_developer_value">Elmahdi Dev</string>
     <string name="settings_version_title">الإصدار</string>
@@ -125,4 +130,3 @@
     <string name="speed_limit_unlimited">بلا حدود (أقصى سرعة)</string>
     <string name="speed_limit_active_format">الحد: %1$s</string>
 </resources>
-
