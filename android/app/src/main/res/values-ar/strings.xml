@@ -1,0 +1,119 @@
+<resources>
+    <!-- App Branding -->
+    <string name="app_name">سهم لإدارة التنزيلات</string>
+    <string name="app_arabic_name">سهم</string>
+    <string name="app_tagline">مدير تنزيل سريع، موثوق وخالٍ تماماً من الإعلانات</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_downloads">التنزيلات</string>
+    <string name="nav_queue">الانتظار</string>
+    <string name="nav_completed">المكتملة</string>
+    <string name="nav_files">الملفات</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Downloads Screen -->
+    <string name="input_url_hint">أدخل أو الصق رابط الملف المباشر (HTTP/HTTPS)</string>
+    <string name="action_paste">لصق</string>
+    <string name="action_add_download">تنزيل</string>
+    <string name="action_pause">إيقاف مؤقت</string>
+    <string name="action_resume">استئناف</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_retry">إعادة المحاولة</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_open">فتح</string>
+    <string name="action_share">مشاركة</string>
+    <string name="active_downloads_title">التنزيلات النشطة</string>
+    <string name="active_count_format">%1$d من %2$d تنزيلات جارية</string>
+    <string name="empty_downloads_title">لا توجد تنزيلات نشطة</string>
+    <string name="empty_downloads_subtitle">الصق رابط ملف مباشر في الأعلى أو شارك رابطاً من متصفحك للبدء فوراً.</string>
+
+    <!-- Statuses -->
+    <string name="status_queued">قيد الانتظار</string>
+    <string name="status_connecting">جارٍ الاتصال…</string>
+    <string name="status_downloading">جارٍ التنزيل</string>
+    <string name="status_paused">متوقف مؤقتاً</string>
+    <string name="status_completed">مكتمل</string>
+    <string name="status_failed">تعذر التنزيل</string>
+    <string name="status_cancelled">ملغي</string>
+
+    <!-- Metrics and Info -->
+    <string name="speed_format">%1$s/ثانية</string>
+    <string name="eta_format">الوقت المتبقي: %1$s</string>
+    <string name="eta_calculating">جارٍ الحساب…</string>
+    <string name="progress_size_format">%1$s من %2$s</string>
+    <string name="progress_size_unknown">تم تنزيل %1$s</string>
+    <string name="resumable_supported">يدعم الاستئناف</string>
+    <string name="resumable_not_supported">لا يدعم الاستئناف</string>
+
+    <!-- Queue Screen -->
+    <string name="queue_title">قائمة الانتظار</string>
+    <string name="queue_subtitle">مهام تنتظر توفر منفذ للتنزيل</string>
+    <string name="empty_queue_title">قائمة الانتظار فارغة</string>
+    <string name="empty_queue_subtitle">التنزيلات التي تتجاوز الحد المتزامن ستنتظر دورها هنا تلقائياً.</string>
+    <string name="queue_priority_up">تقديم الدور</string>
+    <string name="queue_priority_down">تأخير الدور</string>
+    <string name="queue_clear_all">تفريغ قائمة الانتظار</string>
+
+    <!-- Completed Screen -->
+    <string name="completed_title">التنزيلات المكتملة</string>
+    <string name="empty_completed_title">لا توجد تنزيلات مكتملة</string>
+    <string name="empty_completed_subtitle">الملفات التي تم تنزيلها بنجاح ستُحفظ وتُنظم هنا.</string>
+    <string name="completed_clear_history">مسح السجل</string>
+    <string name="confirm_delete_title">حذف التنزيل؟</string>
+    <string name="confirm_delete_msg">هل تريد بالتأكيد حذف \"%1$s\" من ذاكرة جهازك؟</string>
+
+    <!-- Files Screen -->
+    <string name="files_title">مدير الملفات</string>
+    <string name="files_search_hint">البحث عن ملف بالاسم…</string>
+    <string name="filter_all">الكل</string>
+    <string name="filter_documents">المستندات</string>
+    <string name="filter_media">الوسائط</string>
+    <string name="filter_archives">الأرشيف</string>
+    <string name="filter_apks">تطبيقات APK</string>
+    <string name="sort_date">التاريخ</string>
+    <string name="sort_name">الاسم</string>
+    <string name="sort_size">الحجم</string>
+    <string name="file_not_found">الملف غير موجود في ذاكرة الجهاز</string>
+
+    <!-- Share Receiver Dialog -->
+    <string name="share_received_title">رابط تنزيل جديد</string>
+    <string name="share_received_subtitle">تم استلام رابط مشاركة من تطبيق آخر</string>
+    <string name="share_start_download">بدء التنزيل الآن</string>
+    <string name="share_add_to_queue">إضافة لقائمة الانتظار</string>
+    <string name="invalid_url_error">يرجى إدخال رابط مباشر صالح يبدأ بـ HTTP أو HTTPS</string>
+    <string name="duplicate_url_warning">هذا الرابط مضاف بالفعل في قائمة التنزيلات</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="settings_section_general">عام</string>
+    <string name="settings_language">لغة التطبيق</string>
+    <string name="settings_language_desc">الإنجليزية أو العربية (واجهة RTL حقيقية)</string>
+    <string name="settings_theme">المظهر</string>
+    <string name="settings_theme_system">تلقائي حسب النظام</string>
+    <string name="settings_theme_light">مظهر فاتح</string>
+    <string name="settings_theme_dark">مظهر داكن</string>
+
+    <string name="settings_section_network">الشبكة وقائمة الانتظار</string>
+    <string name="settings_max_concurrent">أقصى عدد للتنزيلات المتزامنة</string>
+    <string name="settings_max_concurrent_desc">عدد الملفات الجاري تنزيلها في نفس اللحظة</string>
+    <string name="settings_wifi_only">التنزيل عبر واي فاي فقط</string>
+    <string name="settings_wifi_only_desc">إيقاف التنزيلات مؤقتاً عند استخدام باقة بيانات الهاتف</string>
+
+    <string name="settings_section_storage">التخزين</string>
+    <string name="settings_storage_location">مجلد الحفظ</string>
+    <string name="settings_storage_location_path">الذاكرة الداخلية / التنزيلات / سهم</string>
+
+    <string name="settings_section_privacy">حول التطبيق والمطور</string>
+    <string name="settings_privacy_title">بدون تتبع وخالٍ من الإعلانات</string>
+    <string name="settings_privacy_desc">سهم تطبيق مستقل خالٍ تماماً من الإعلانات، بدون أي تتبع أو حسابات سحابية. جميع السجلات تحفظ محلياً على جهازك في قاعدة بيانات Room.</string>
+    <string name="settings_developer_title">المطور</string>
+    <string name="settings_developer_value">Elmahdi Dev</string>
+    <string name="settings_version_title">الإصدار</string>
+    <string name="settings_version_value">1.0.0 (إصدار أندرويد الأصيل)</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">تنزيلات سهم النشطة</string>
+    <string name="notification_channel_desc">إظهار تقدم التنزيل المستمر والسرعات وأزرار التحكم السريع</string>
+    <string name="notification_title_downloading">سهم يقوم بتنزيل %1$d ملفات</string>
+    <string name="notification_title_completed">اكتمل التنزيل: %1$s</string>
+</resources>

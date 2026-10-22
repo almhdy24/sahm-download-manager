@@ -1,0 +1,119 @@
+<resources>
+    <!-- App Branding -->
+    <string name="app_name">Sahm Download Manager</string>
+    <string name="app_arabic_name">سهم</string>
+    <string name="app_tagline">Reliable, ad-free high-speed download manager</string>
+
+    <!-- Bottom Navigation -->
+    <string name="nav_downloads">Downloads</string>
+    <string name="nav_queue">Queue</string>
+    <string name="nav_completed">Completed</string>
+    <string name="nav_files">Files</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Downloads Screen -->
+    <string name="input_url_hint">Enter or paste direct file URL (HTTP/HTTPS)</string>
+    <string name="action_paste">Paste</string>
+    <string name="action_add_download">Download</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_open">Open</string>
+    <string name="action_share">Share</string>
+    <string name="active_downloads_title">Active Downloads</string>
+    <string name="active_count_format">%1$d of %2$d active transfers</string>
+    <string name="empty_downloads_title">No Active Downloads</string>
+    <string name="empty_downloads_subtitle">Paste a direct file URL above or share a link from your browser to begin.</string>
+
+    <!-- Statuses -->
+    <string name="status_queued">Queued</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_downloading">Downloading</string>
+    <string name="status_paused">Paused</string>
+    <string name="status_completed">Completed</string>
+    <string name="status_failed">Failed</string>
+    <string name="status_cancelled">Cancelled</string>
+
+    <!-- Metrics and Info -->
+    <string name="speed_format">%1$s/s</string>
+    <string name="eta_format">ETA %1$s</string>
+    <string name="eta_calculating">Calculating…</string>
+    <string name="progress_size_format">%1$s of %2$s</string>
+    <string name="progress_size_unknown">%1$s downloaded</string>
+    <string name="resumable_supported">Resumable</string>
+    <string name="resumable_not_supported">Non-resumable</string>
+
+    <!-- Queue Screen -->
+    <string name="queue_title">Download Queue</string>
+    <string name="queue_subtitle">Tasks waiting for an available download slot</string>
+    <string name="empty_queue_title">Queue is Empty</string>
+    <string name="empty_queue_subtitle">Downloads waiting beyond your concurrency limit will appear here.</string>
+    <string name="queue_priority_up">Move Up</string>
+    <string name="queue_priority_down">Move Down</string>
+    <string name="queue_clear_all">Clear Queue</string>
+
+    <!-- Completed Screen -->
+    <string name="completed_title">Completed Downloads</string>
+    <string name="empty_completed_title">No Completed Downloads</string>
+    <string name="empty_completed_subtitle">Finished downloads will be stored and organized here.</string>
+    <string name="completed_clear_history">Clear History</string>
+    <string name="confirm_delete_title">Delete Download?</string>
+    <string name="confirm_delete_msg">Do you want to delete \"%1$s\" from your device?</string>
+
+    <!-- Files Screen -->
+    <string name="files_title">File Manager</string>
+    <string name="files_search_hint">Search files by name…</string>
+    <string name="filter_all">All</string>
+    <string name="filter_documents">Documents</string>
+    <string name="filter_media">Media</string>
+    <string name="filter_archives">Archives</string>
+    <string name="filter_apks">APKs</string>
+    <string name="sort_date">Date</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_size">Size</string>
+    <string name="file_not_found">File not found on device storage</string>
+
+    <!-- Share Receiver Dialog -->
+    <string name="share_received_title">New Download Link</string>
+    <string name="share_received_subtitle">A shared URL was received from another application</string>
+    <string name="share_start_download">Start Download</string>
+    <string name="share_add_to_queue">Add to Queue</string>
+    <string name="invalid_url_error">Please enter a valid HTTP or HTTPS file URL</string>
+    <string name="duplicate_url_warning">This URL is already in your download list</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_general">General</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_desc">English or العربية (RTL)</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System Default</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+
+    <string name="settings_section_network">Network &amp; Queue</string>
+    <string name="settings_max_concurrent">Max Concurrent Downloads</string>
+    <string name="settings_max_concurrent_desc">Number of files downloaded at the same time</string>
+    <string name="settings_wifi_only">Download on Wi-Fi Only</string>
+    <string name="settings_wifi_only_desc">Pause transfers automatically when cellular data is in use</string>
+
+    <string name="settings_section_storage">Storage</string>
+    <string name="settings_storage_location">Download Location</string>
+    <string name="settings_storage_location_path">Internal Storage / Download / Sahm</string>
+
+    <string name="settings_section_privacy">About &amp; Privacy</string>
+    <string name="settings_privacy_title">Zero Tracking &amp; Privacy</string>
+    <string name="settings_privacy_desc">Sahm is an independent, 100% ad-free download manager engineered without tracking SDKs, cloud accounts, or telemetry. All metadata stays local in Room.</string>
+    <string name="settings_developer_title">Developer</string>
+    <string name="settings_developer_value">Elmahdi Dev</string>
+    <string name="settings_version_title">Version</string>
+    <string name="settings_version_value">1.0.0 (Native Release)</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">Sahm Active Downloads</string>
+    <string name="notification_channel_desc">Shows ongoing download progress, speeds, and quick controls</string>
+    <string name="notification_title_downloading">Sahm is downloading %1$d files</string>
+    <string name="notification_title_completed">Download completed: %1$s</string>
+</resources>

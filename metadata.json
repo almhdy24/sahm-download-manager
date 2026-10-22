@@ -1,0 +1,6 @@
+{
+  "name": "Sahm Download Manager (سهم)",
+  "description": "An independent, ad-free native Android download manager inspired by ADM with resumable downloads, queue concurrency, and bilingual Arabic/English support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
